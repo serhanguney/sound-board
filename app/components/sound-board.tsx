@@ -272,28 +272,6 @@ export default function SoundBoard() {
           </Alert>
         )}
 
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center space-x-2">
-            <VolumeX className="h-4 w-4 text-muted-foreground" />
-            <Slider
-              className="w-28 md:w-40"
-              value={[volume]}
-              max={1}
-              step={0.1}
-              onValueChange={(value) => setVolume(value[0])}
-            />
-            <Volume2 className="h-4 w-4 text-muted-foreground" />
-          </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={stopAllSounds}
-            disabled={!currentlyPlaying}
-          >
-            Stop All Sounds
-          </Button>
-        </div>
-
         {loading ? (
           <div className="flex justify-center py-12">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
