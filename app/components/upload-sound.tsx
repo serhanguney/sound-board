@@ -2,7 +2,7 @@
 
 import type React from 'react';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -14,38 +14,62 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import { toast } from '@/components/ui/use-toast';
-import { Upload, X, Check, AlertCircle } from 'lucide-react';
+import { Upload, X, Check, AlertCircle, RefreshCw } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
-import { uploadSound } from '../actions/upload-sound';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { useUploadSound } from '@/hooks/useSounds';
 
 export default function UploadSound({ onSuccess }: { onSuccess?: () => void }) {
   const [file, setFile] = useState<File | null>(null);
   const [displayName, setDisplayName] = useState('');
-  const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
-  const [error, setError] = useState<string | null>(null);
+  const [validationError, setValidationError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  // Use React Query for uploading sounds
+  const { 
+    mutate: uploadSoundMutation, 
+    isPending: isUploading, 
+    error: uploadError,
+    isSuccess
+  } = useUploadSound();
 
   // Only show if the feature flag is enabled
   if (process.env.NEXT_PUBLIC_UPLOAD_ENABLED !== 'true') {
     return null;
   }
 
+  // Reset form when upload is successful
+  useEffect(() => {
+    if (isSuccess) {
+      resetForm();
+      // Try to call the global refresh function
+      // @ts-ignore
+      if (typeof window !== 'undefined' && window.refreshSoundBoard) {
+        // @ts-ignore
+        window.refreshSoundBoard();
+      }
+      // Call the provided onSuccess callback if any
+      if (onSuccess) {
+        onSuccess();
+      }
+    }
+  }, [isSuccess, onSuccess]);
+
+  // Handle file selection
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
     if (!selectedFile) return;
 
     // Validate file type
     if (!selectedFile.type.startsWith('audio/')) {
-      setError('Please select an audio file');
+      setValidationError('Please select an audio file');
       setFile(null);
       return;
     }
 
     setFile(selectedFile);
-    setError(null);
+    setValidationError(null);
 
     // Set a default display name based on the filename
     const fileName = selectedFile.name.split('.')[0];
@@ -58,92 +82,51 @@ export default function UploadSound({ onSuccess }: { onSuccess?: () => void }) {
     setDisplayName(formattedName);
   };
 
+  // Reset the form
   const resetForm = () => {
     setFile(null);
     setDisplayName('');
     setUploadProgress(0);
-    setError(null);
+    setValidationError(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
   };
 
-  // Update the onSuccess handler in the UploadSound component
-  const handleSuccess = () => {
-    // Try to call the global refresh function
-    // @ts-ignore
-    if (typeof window !== 'undefined' && window.refreshSoundBoard) {
-      // @ts-ignore
-      window.refreshSoundBoard();
-    }
-
-    // Call the provided onSuccess callback if any
-    if (onSuccess) {
-      onSuccess();
-    }
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
+  // Handle form submission
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
+    // Validate inputs
     if (!file) {
-      setError('Please select a file');
+      setValidationError('Please select a file');
       return;
     }
 
     if (!displayName.trim()) {
-      setError('Please enter a display name');
+      setValidationError('Please enter a display name');
       return;
     }
 
-    try {
-      setIsUploading(true);
-      setError(null);
-
-      // Simulate upload progress
-      const progressInterval = setInterval(() => {
-        setUploadProgress((prev) => {
-          const newProgress = prev + 5;
-          return newProgress < 90 ? newProgress : prev;
-        });
-      }, 100);
-
-      const result = await uploadSound(file, displayName);
-
-      clearInterval(progressInterval);
-      setUploadProgress(100);
-
-      if (result.success) {
-        toast({
-          title: 'Upload Successful',
-          description: `"${displayName}" has been added to your sound board.`,
-        });
-
-        // Reset the form
-        resetForm();
-
-        // Call the success handler
-        handleSuccess();
-      } else {
-        setError(result.message || 'Upload failed');
-        toast({
-          title: 'Upload Failed',
-          description: result.message,
-          variant: 'destructive',
-        });
-      }
-    } catch (err) {
-      const errorMessage =
-        err instanceof Error ? err.message : 'Unknown error occurred';
-      setError(errorMessage);
-      toast({
-        title: 'Upload Failed',
-        description: errorMessage,
-        variant: 'destructive',
+    // Start progress animation
+    setUploadProgress(0);
+    const progressInterval = setInterval(() => {
+      setUploadProgress((prev) => {
+        const newProgress = prev + 5;
+        return newProgress < 90 ? newProgress : prev;
       });
-    } finally {
-      setIsUploading(false);
-    }
+    }, 100);
+
+    // Upload the sound using React Query
+    uploadSoundMutation(
+      { file, displayName },
+      {
+        onSettled: () => {
+          clearInterval(progressInterval);
+          setUploadProgress(100);
+        }
+      }
+    );
   };
 
   return (
@@ -188,10 +171,12 @@ export default function UploadSound({ onSuccess }: { onSuccess?: () => void }) {
             />
           </div>
 
-          {error && (
+          {(validationError || uploadError) && (
             <Alert variant="destructive">
               <AlertCircle className="h-4 w-4" />
-              <AlertDescription>{error}</AlertDescription>
+              <AlertDescription>
+                {validationError || (uploadError instanceof Error ? uploadError.message : 'Upload failed')}
+              </AlertDescription>
             </Alert>
           )}
 
