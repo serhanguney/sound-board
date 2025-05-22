@@ -1,11 +1,18 @@
 'use client';
 
-import { Suspense } from 'react';
+import { Suspense, useState, useEffect } from 'react';
 import SoundBoard from './components/sound-board';
 import UploadSound from './components/upload-sound';
 
 export default function Home() {
-  const showUpload = !!localStorage && !!localStorage.getItem('show_upload');
+  const [showUpload, setShowUpload] = useState(false);
+  
+  useEffect(() => {
+    // Check localStorage only on the client side
+    const shouldShowUpload = localStorage && localStorage.getItem('show_upload');
+    setShowUpload(!!shouldShowUpload);
+  }, []);
+  
   return (
     <div className="container mx-auto py-8 px-4">
       <Suspense
