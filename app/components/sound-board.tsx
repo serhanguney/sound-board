@@ -1,6 +1,6 @@
-'use client';
+"use client";
 
-import { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from "react";
 import {
   Bell,
   Clock,
@@ -14,40 +14,52 @@ import {
   Play,
   AlertCircle,
   RefreshCw,
-} from 'lucide-react';
-import { Button } from '@/components/ui/button';
+  Calendar,
+  User,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from '@/components/ui/card';
-import { Slider } from '@/components/ui/slider';
-import { toast } from '@/components/ui/use-toast';
-import { type SoundMetadata } from '../actions/upload-default-sounds';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { useSounds } from '@/hooks/useSounds';
-import RandomSoundTimer from './random-sound-timer';
+} from "@/components/ui/card";
+import { Slider } from "@/components/ui/slider";
+import { toast } from "@/components/ui/use-toast";
+import { type SoundMetadata } from "../actions/upload-default-sounds";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { useSounds } from "@/hooks/useSounds";
+import ScheduledSounds from "./scheduled-sounds";
+import ScheduleDialog from "./schedule-dialog";
 
 // Map sound names to icons
 const getIconForSound = (soundName: string) => {
   const name = soundName.toLowerCase();
-  if (name.includes('clock') || name.includes('tick'))
+  if (name.includes("clock") || name.includes("tick"))
     return <Clock className="h-6 w-6" />;
-  if (name.includes('applause') || name.includes('clap'))
+  if (name.includes("applause") || name.includes("clap"))
     return <ThumbsUp className="h-6 w-6" />;
-  if (name.includes('boo') || name.includes('negative'))
+  if (name.includes("boo") || name.includes("negative"))
     return <ThumbsDown className="h-6 w-6" />;
-  if (name.includes('drum')) return <Drumstick className="h-6 w-6" />;
-  if (name.includes('bell') || name.includes('ring'))
+  if (name.includes("drum")) return <Drumstick className="h-6 w-6" />;
+  if (name.includes("bell") || name.includes("ring"))
     return <Bell className="h-6 w-6" />;
-  if (name.includes('tada') || name.includes('success') || name.includes('win'))
+  if (name.includes("tada") || name.includes("success") || name.includes("win"))
     return <Trophy className="h-6 w-6" />;
-  if (name.includes('laugh') || name.includes('haha'))
+  if (name.includes("laugh") || name.includes("haha"))
     return <Laugh className="h-6 w-6" />;
   return <Music className="h-6 w-6" />;
 };
+
+interface ScheduledSound {
+  id: string;
+  name: string;
+  icon: React.ReactNode;
+  scheduledTime: number;
+  isRandom: boolean;
+  isLooping?: boolean;
+}
 
 export default function SoundBoard() {
   const [volume, setVolume] = useState(0.7);
@@ -55,6 +67,11 @@ export default function SoundBoard() {
   const [loadErrors, setLoadErrors] = useState<Record<string, boolean>>({});
   const [loopingIds, setLoopingIds] = useState<Record<string, boolean>>({});
   const audioRefs = useRef<{ [key: string]: HTMLAudioElement | null }>({});
+  const [scheduledSounds, setScheduledSounds] = useState<ScheduledSound[]>([]);
+  const [showScheduleDialog, setShowScheduleDialog] = useState(false);
+  const [selectedSound, setSelectedSound] = useState<SoundMetadata | null>(
+    null
+  );
 
   // Use React Query to fetch sounds
   const {
@@ -74,14 +91,14 @@ export default function SoundBoard() {
   useEffect(() => {
     if (!sounds || sounds.length === 0) return;
 
-    console.log('Initializing audio elements for', sounds.length, 'sounds');
+    console.log("Initializing audio elements for", sounds.length, "sounds");
     const newLoadErrors: Record<string, boolean> = {};
 
     // Clear previous audio elements
     Object.values(audioRefs.current).forEach((audio) => {
       if (audio) {
         audio.pause();
-        audio.src = '';
+        audio.src = "";
       }
     });
 
@@ -98,7 +115,7 @@ export default function SoundBoard() {
 
         // Verify the URL is accessible first
         try {
-          const response = await fetch(sound.blobUrl, { method: 'HEAD' });
+          const response = await fetch(sound.blobUrl, { method: "HEAD" });
           if (!response.ok) {
             throw new Error(`URL returned status ${response.status}`);
           }
@@ -114,7 +131,7 @@ export default function SoundBoard() {
             setTimeout(() => loadSoundWithRetry(sound, retryCount + 1), 500);
             return;
           } else {
-            throw new Error('Max retries reached');
+            throw new Error("Max retries reached");
           }
         }
 
@@ -178,8 +195,8 @@ export default function SoundBoard() {
         };
 
         // Set audio properties
-        audio.crossOrigin = 'anonymous'; // Try with CORS enabled
-        audio.preload = 'auto';
+        audio.crossOrigin = "anonymous"; // Try with CORS enabled
+        audio.preload = "auto";
         audio.volume = volume;
 
         // Set the source last
@@ -206,12 +223,12 @@ export default function SoundBoard() {
       Object.values(audioRefs.current).forEach((audio) => {
         if (audio) {
           audio.pause();
-          audio.src = '';
+          audio.src = "";
         }
       });
     };
-  // Only depend on sounds and volume, not on currentlyPlaying
-  // This prevents re-initialization when play/pause state changes
+    // Only depend on sounds and volume, not on currentlyPlaying
+    // This prevents re-initialization when play/pause state changes
   }, [sounds, volume]);
 
   // Update volume when it changes
@@ -228,9 +245,9 @@ export default function SoundBoard() {
       // Check if this sound had a loading error
       if (loadErrors[sound.id]) {
         toast({
-          title: 'Cannot Play Sound',
+          title: "Cannot Play Sound",
           description: `The sound "${sound.displayName}" failed to load and cannot be played.`,
-          variant: 'destructive',
+          variant: "destructive",
         });
         return;
       }
@@ -265,9 +282,9 @@ export default function SoundBoard() {
             .catch((error) => {
               console.error(`Playback failed for ${sound.displayName}:`, error);
               toast({
-                title: 'Playback Error',
+                title: "Playback Error",
                 description: `Could not play "${sound.displayName}". ${error.message}`,
-                variant: 'destructive',
+                variant: "destructive",
               });
             });
         }
@@ -361,6 +378,46 @@ export default function SoundBoard() {
     };
   }, [refreshSounds]);
 
+  const scheduleSound = (
+    sound: SoundMetadata,
+    minutes: number,
+    isLooping: boolean
+  ) => {
+    const scheduledSound: ScheduledSound = {
+      id: `${sound.id}-${Date.now()}`,
+      name: sound.displayName,
+      icon: getIconForSound(sound.displayName),
+      scheduledTime: minutes,
+      isRandom: false,
+      isLooping,
+    };
+    setScheduledSounds((prev) => [...prev, scheduledSound]);
+  };
+
+  const scheduleRandomSound = (minutes: number, isLooping: boolean) => {
+    const scheduledSound: ScheduledSound = {
+      id: `random-${Date.now()}`,
+      name: "Random",
+      icon: <User className="h-6 w-6" />,
+      scheduledTime: minutes,
+      isRandom: true,
+      isLooping,
+    };
+    setScheduledSounds((prev) => [...prev, scheduledSound]);
+  };
+
+  const cancelSchedule = (id: string) => {
+    setScheduledSounds((prev) => prev.filter((sound) => sound.id !== id));
+  };
+
+  const handleSchedule = (minutes: number, isLooping: boolean) => {
+    if (selectedSound) {
+      scheduleSound(selectedSound, minutes, isLooping);
+    } else {
+      scheduleRandomSound(minutes, isLooping);
+    }
+  };
+
   return (
     <Card className="w-full max-w-4xl mx-auto">
       <CardHeader className="text-center">
@@ -373,21 +430,12 @@ export default function SoundBoard() {
             disabled={loading}
             title="Refresh sounds"
           >
-            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
           </Button>
         </div>
-        
-        {/* Random Sound Timer */}
-        <div className="mt-4">
-          <RandomSoundTimer 
-            sounds={sounds} 
-            onPlaySound={playSound} 
-            disabled={loading || sounds.length === 0 || Object.keys(loadErrors).length === sounds.length}
-          />
-        </div>
-        
-        <CardDescription>
-          Click on a sound to play it during your meetings
+        <CardDescription className="text-left">
+          Click on a sound to play it during your meetings. End your meetings
+          with scheduled sounds. Schedule random sounds for every interval...
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -396,7 +444,7 @@ export default function SoundBoard() {
             <AlertCircle className="h-4 w-4" />
             <AlertTitle>Error Loading Sounds</AlertTitle>
             <AlertDescription>
-              {error instanceof Error ? error.message : 'Failed to load sounds'}
+              {error instanceof Error ? error.message : "Failed to load sounds"}
               <div className="mt-2">
                 <Button variant="outline" size="sm" onClick={refreshSounds}>
                   <RefreshCw className="mr-2 h-4 w-4" />
@@ -413,7 +461,7 @@ export default function SoundBoard() {
             <AlertTitle>Loading Issues</AlertTitle>
             <AlertDescription>
               {errorCount === sounds.length
-                ? 'All sounds failed to load. Please try refreshing.'
+                ? "All sounds failed to load. Please try refreshing."
                 : `${errorCount} out of ${sounds.length} sounds failed to load. Some buttons may not work.`}
               <div className="mt-2">
                 <Button variant="outline" size="sm" onClick={refreshSounds}>
@@ -436,81 +484,119 @@ export default function SoundBoard() {
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-            {sounds.map((sound) => (
-              <div key={sound.id} className="relative group">
-                <Button
-                  variant={
-                    currentlyPlaying === sound.id ? 'default' : 'outline'
-                  }
-                  className={`w-full h-24 flex flex-col items-center justify-center gap-2 transition-all ${
-                    currentlyPlaying === sound.id
-                      ? 'bg-primary text-primary-foreground'
-                      : ''
-                  } ${
-                    loadErrors[sound.id] ? 'opacity-50 cursor-not-allowed' : ''
-                  } ${loopingIds[sound.id] ? 'border-green-500 border-2' : ''}`}
-                  onClick={() => playSound(sound)}
-                  disabled={loadErrors[sound.id]}
-                >
-                  {loadErrors[sound.id] ? (
-                    <AlertCircle className="h-6 w-6 text-destructive" />
-                  ) : (
-                    getIconForSound(sound.displayName)
-                  )}
-                  <span className="text-sm">{sound.displayName}</span>
-                </Button>
-
-                {/* Hover controls */}
-                <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/50 rounded-md">
-                  <div className="flex gap-2">
-                    {currentlyPlaying === sound.id ? (
-                      <Button
-                        size="icon"
-                        variant="destructive"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          stopSound(sound.id);
-                        }}
-                        title="Stop"
-                      >
-                        <Pause className="h-4 w-4" />
-                      </Button>
+          <div className="space-y-8">
+            <ScheduledSounds
+              scheduledSounds={scheduledSounds}
+              onPlaySound={playSound}
+              onCancelSchedule={cancelSchedule}
+              onSchedule={scheduleRandomSound}
+              sounds={sounds}
+              currentlyPlaying={currentlyPlaying}
+              setCurrentlyPlaying={setCurrentlyPlaying}
+            />
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              {sounds.map((sound) => (
+                <div key={sound.id} className="relative group">
+                  <Button
+                    variant={
+                      currentlyPlaying === sound.id ? "default" : "outline"
+                    }
+                    className={`w-full h-24 flex flex-col items-center justify-center gap-2 transition-all ${
+                      currentlyPlaying === sound.id
+                        ? "bg-primary text-primary-foreground"
+                        : ""
+                    } ${
+                      loadErrors[sound.id]
+                        ? "opacity-50 cursor-not-allowed"
+                        : ""
+                    } ${
+                      loopingIds[sound.id] ? "border-green-500 border-2" : ""
+                    }`}
+                    onClick={() => playSound(sound)}
+                    disabled={loadErrors[sound.id]}
+                  >
+                    {loadErrors[sound.id] ? (
+                      <AlertCircle className="h-6 w-6 text-destructive" />
                     ) : (
+                      getIconForSound(sound.displayName)
+                    )}
+                    <span className="text-sm">{sound.displayName}</span>
+                  </Button>
+
+                  {/* Hover controls */}
+                  <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/50 rounded-md">
+                    <div className="flex gap-2">
+                      {currentlyPlaying === sound.id ? (
+                        <Button
+                          size="icon"
+                          variant="destructive"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            stopSound(sound.id);
+                          }}
+                          title="Stop"
+                        >
+                          <Pause className="h-4 w-4" />
+                        </Button>
+                      ) : (
+                        <Button
+                          size="icon"
+                          variant="default"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            playSound(sound);
+                          }}
+                          title="Play"
+                          disabled={loadErrors[sound.id]}
+                        >
+                          <Play className="h-4 w-4" />
+                        </Button>
+                      )}
+
                       <Button
                         size="icon"
-                        variant="default"
+                        variant={loopingIds[sound.id] ? "default" : "outline"}
                         onClick={(e) => {
                           e.stopPropagation();
-                          playSound(sound);
+                          toggleLoop(sound.id);
                         }}
-                        title="Play"
+                        title={
+                          loopingIds[sound.id] ? "Disable loop" : "Enable loop"
+                        }
                         disabled={loadErrors[sound.id]}
                       >
-                        <Play className="h-4 w-4" />
+                        <RefreshCw className="h-4 w-4" />
                       </Button>
-                    )}
 
-                    <Button
-                      size="icon"
-                      variant={loopingIds[sound.id] ? 'default' : 'outline'}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        toggleLoop(sound.id);
-                      }}
-                      title={
-                        loopingIds[sound.id] ? 'Disable loop' : 'Enable loop'
-                      }
-                      disabled={loadErrors[sound.id]}
-                    >
-                      <RefreshCw className="h-4 w-4" />
-                    </Button>
+                      <Button
+                        size="icon"
+                        variant="outline"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setShowScheduleDialog(true);
+                          setSelectedSound(sound);
+                        }}
+                        title="Schedule"
+                        disabled={loadErrors[sound.id]}
+                      >
+                        <Calendar className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         )}
+
+        <ScheduleDialog
+          open={showScheduleDialog}
+          onOpenChange={setShowScheduleDialog}
+          sound={selectedSound}
+          onSchedule={(minutes: number, isLooping: boolean) => {
+            handleSchedule(minutes, isLooping);
+          }}
+        />
       </CardContent>
     </Card>
   );
