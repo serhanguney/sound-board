@@ -34,7 +34,7 @@ export default function ScheduleDialog({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const numMinutes = parseFloat(minutes);
-    if (numMinutes >= 0.1 && numMinutes <= 30) {
+    if (numMinutes >= 1 && numMinutes <= 120) {
       onSchedule(numMinutes, isLooping);
       onOpenChange(false);
       setMinutes("");
@@ -56,13 +56,13 @@ export default function ScheduleDialog({
         <form onSubmit={handleSubmit}>
           <div className="grid gap-4 py-4">
             <div className="grid gap-2">
-              <Label htmlFor="minutes">Minutes (0.1-30)</Label>
+              <Label htmlFor="minutes">Minutes (1-120)</Label>
               <Input
                 id="minutes"
                 type="number"
-                min={0.1}
-                max={30}
-                step={0.1}
+                min={1}
+                max={120}
+                step={1}
                 value={minutes}
                 onChange={(e) => setMinutes(e.target.value)}
                 placeholder="Enter minutes"
