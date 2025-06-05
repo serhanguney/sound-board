@@ -6,6 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { type SoundMetadata } from "../actions/upload-default-sounds";
 import ScheduleDialog from "./schedule-dialog";
+import { getAudioDuration } from "@/app/utils/audio";
 
 interface ScheduledSound {
   id: string;
@@ -142,13 +143,21 @@ export default function ScheduledSounds({
 
   // Handle resetting currentlyPlaying
   useEffect(() => {
-    if (currentlyPlaying) {
-      const timeout = setTimeout(() => {
-        setCurrentlyPlaying(null);
-      }, 1000);
-      return () => clearTimeout(timeout);
-    }
-  }, [currentlyPlaying, setCurrentlyPlaying]);
+    const stopTime = async (current: string) => {
+      const currentSound = sounds.find((s) => s.id === current);
+      const currentSoundDuration = currentSound?.blobUrl
+        ? await getAudioDuration(currentSound.blobUrl)
+        : null;
+
+      if (currentSoundDuration) {
+        const timeout = setTimeout(() => {
+          setCurrentlyPlaying(null);
+        }, currentSoundDuration * 1000);
+        return () => clearTimeout(timeout);
+      }
+    };
+    if (currentlyPlaying) stopTime(currentlyPlaying);
+  }, [currentlyPlaying, setCurrentlyPlaying, sounds]);
 
   // Format time remaining
   const formatTimeRemaining = (seconds: number) => {
