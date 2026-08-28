@@ -1,6 +1,6 @@
 'use client';
 
-import { AudioLines, Search } from 'lucide-react';
+import { AudioLines, Search, Upload } from 'lucide-react';
 
 /**
  * The design puts the brand in a sidebar. With the sidebar dropped for the MVP
@@ -13,9 +13,11 @@ import { AudioLines, Search } from 'lucide-react';
 export function TopBar({
   query,
   onQueryChange,
+  onUpload,
 }: {
   query: string;
   onQueryChange: (value: string) => void;
+  onUpload: () => void;
 }) {
   return (
     <header className="sticky top-0 z-10 border-b border-line bg-background/85 backdrop-blur">
@@ -49,8 +51,18 @@ export function TopBar({
           />
         </label>
 
-        {/* Balances the brand column so the search sits centred. */}
-        <span className="hidden sm:block" aria-hidden />
+        {/* Mirrors the brand column so the search stays centred, with the
+            upload trigger pinned to the trailing edge. */}
+        <div className="flex justify-end">
+          <button
+            type="button"
+            onClick={onUpload}
+            className="inline-flex items-center gap-2 rounded-sm border border-line-strong bg-surface px-3.5 py-2.5 text-[13px] font-semibold text-ink transition-colors hover:bg-surface-muted"
+          >
+            <Upload className="h-4 w-4" aria-hidden />
+            <span className="hidden sm:inline">Upload sound</span>
+          </button>
+        </div>
       </div>
     </header>
   );

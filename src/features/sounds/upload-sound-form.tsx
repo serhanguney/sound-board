@@ -2,7 +2,7 @@
 
 import { useRef, useState } from 'react';
 import type { ChangeEvent, FormEvent } from 'react';
-import { AlertCircle, Check, Upload, X } from 'lucide-react';
+import { AlertCircle, Check, X } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { parseSoundPath } from '@/domain/sound';
 import { SOUND_TAGS, type SoundTag } from '@/domain/sound-tag';
@@ -10,7 +10,14 @@ import { cn } from '@/lib/utils';
 import { TagChip } from './tag-badge';
 import { useUploadSound } from './use-sounds';
 
-export function UploadSoundForm({ onUploaded }: { onUploaded?: () => void }) {
+export function UploadSoundForm({
+  password,
+  onUploaded,
+}: {
+  /** Verified admin password, replayed with each upload. */
+  password: string;
+  onUploaded?: () => void;
+}) {
   const [file, setFile] = useState<File | null>(null);
   const [displayName, setDisplayName] = useState('');
   const [tag, setTag] = useState<SoundTag | null>(null);
@@ -57,7 +64,7 @@ export function UploadSoundForm({ onUploaded }: { onUploaded?: () => void }) {
 
     // Reset on success only — a failed upload keeps the user's input.
     mutate(
-      { file, displayName: displayName.trim(), tag },
+      { file, displayName: displayName.trim(), tag, password },
       {
         onSuccess: () => {
           reset();
@@ -71,19 +78,7 @@ export function UploadSoundForm({ onUploaded }: { onUploaded?: () => void }) {
     validationError ?? (error instanceof Error ? error.message : null);
 
   return (
-    <form
-      onSubmit={handleSubmit}
-      className="mx-auto w-full max-w-md space-y-4 rounded-lg border border-line bg-surface p-6 shadow-panel"
-    >
-      <div className="space-y-1">
-        <h2 className="flex items-center gap-2 font-display text-[17px] font-semibold text-ink">
-          <Upload className="h-4 w-4" aria-hidden />
-          Upload sound
-        </h2>
-        <p className="text-[13px] text-ink-subtle">
-          The tag is stored in the filename, so it travels with the file.
-        </p>
-      </div>
+    <form onSubmit={handleSubmit} className="space-y-4">
 
       <label className="block space-y-1.5">
         <span className="text-[13px] font-medium text-ink">Sound file</span>

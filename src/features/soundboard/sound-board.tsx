@@ -10,6 +10,7 @@ import type { SoundTagOrUntagged } from '@/domain/sound-tag';
 import { AddToQueueDialog } from '@/features/queue/add-to-queue-dialog';
 import { QueuePanel } from '@/features/queue/queue-panel';
 import { useQueueAudioBridge } from '@/features/queue/use-queue-runner-bridge';
+import { AdminUploadDialog } from '@/features/sounds/admin-upload-dialog';
 import { useSounds } from '@/features/sounds/use-sounds';
 import { useQueueRunner, useQueueState } from '@/scheduling/queue-provider';
 import { SoundGrid } from './sound-grid';
@@ -37,6 +38,9 @@ export function SoundBoard() {
   const [query, setQuery] = useState('');
   const [activeTag, setActiveTag] = useState<SoundTagOrUntagged | null>(null);
   const [dialog, setDialog] = useState<{ sound: Sound | null } | null>(null);
+  const [uploadOpen, setUploadOpen] = useState(false);
+  // Held in memory only, for the life of the tab.
+  const [adminPassword, setAdminPassword] = useState<string | null>(null);
 
   const visible = useMemo(
     () => searchSounds(filterByTag(sounds, activeTag), query),
@@ -72,7 +76,11 @@ export function SoundBoard() {
 
   return (
     <div className="min-h-screen bg-background">
-      <TopBar query={query} onQueryChange={setQuery} />
+      <TopBar
+        query={query}
+        onQueryChange={setQuery}
+        onUpload={() => setUploadOpen(true)}
+      />
 
       <main className="mx-auto max-w-[1400px] space-y-8 px-6 py-8">
         {isError && (
@@ -135,6 +143,13 @@ export function SoundBoard() {
         onMove={handleMove}
         onRemove={handleRemove}
         onPreview={handlePreview}
+      />
+
+      <AdminUploadDialog
+        open={uploadOpen}
+        onOpenChange={setUploadOpen}
+        password={adminPassword}
+        onUnlock={setAdminPassword}
       />
     </div>
   );

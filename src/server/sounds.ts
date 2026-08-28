@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { soundFromBlob, type Sound } from '@/domain/sound';
 import { inferSoundIconKey } from '@/domain/sound-icon';
 import { joinTagSuffix, soundTagSchema } from '@/domain/sound-tag';
+import { isAdminPassword } from './admin';
 
 const SOUND_PREFIX = 'sounds/';
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
@@ -21,6 +22,7 @@ export async function listSounds(): Promise<readonly Sound[]> {
 }
 
 const uploadInputSchema = z.object({
+  password: z.string().min(1, 'An admin password is required.'),
   displayName: z.string().trim().min(1).max(60),
   tag: soundTagSchema,
   file: z
@@ -54,6 +56,7 @@ const toSlug = (value: string): string =>
  */
 export async function uploadSound(formData: FormData): Promise<UploadResult> {
   const parsed = uploadInputSchema.safeParse({
+    password: formData.get('password'),
     displayName: formData.get('displayName'),
     tag: formData.get('tag'),
     file: formData.get('file'),
@@ -64,6 +67,13 @@ export async function uploadSound(formData: FormData): Promise<UploadResult> {
       ok: false,
       error: parsed.error.issues[0]?.message ?? 'Invalid upload.',
     };
+  }
+
+  // Re-checked here, not just in the UI: a server action is a public endpoint
+  // and can be called directly, so gating only the dialog would leave the blob
+  // store writable by anyone.
+  if (!(await isAdminPassword(parsed.data.password))) {
+    return { ok: false, error: 'That password is not correct.' };
   }
 
   const { file, displayName, tag } = parsed.data;

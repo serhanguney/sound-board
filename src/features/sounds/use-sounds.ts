@@ -26,11 +26,13 @@ export function useUploadSound() {
       file: File;
       displayName: string;
       tag: SoundTag;
+      password: string;
     }) => {
       const formData = new FormData();
       formData.set('file', input.file);
       formData.set('displayName', input.displayName);
       formData.set('tag', input.tag);
+      formData.set('password', input.password);
 
       const result = await uploadSound(formData);
       if (!result.ok) throw new Error(result.error);
