@@ -72,9 +72,11 @@ export function QueueTimeline({
             >
               <span
                 className={cn(
-                  'flex h-9 w-9 items-center justify-center rounded-full border transition-opacity',
+                  'flex h-9 w-9 items-center justify-center rounded-full border transition-colors',
+                  // A consumed marker stays fully opaque; its filled track and
+                  // struck-through label already mark it as past.
                   consumed
-                    ? 'border-line bg-background text-ink-subtle opacity-50'
+                    ? 'border-line bg-background text-ink-muted'
                     : 'border-line bg-surface text-ink-muted'
                 )}
                 title={entry.label}

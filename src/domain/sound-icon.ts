@@ -28,6 +28,7 @@ export const SOUND_ICON_KEYS = [
   'trophy',
   'wrong',
   'zap',
+  'human-voice'
 ] as const;
 
 export const soundIconKeySchema = z.enum(SOUND_ICON_KEYS);
@@ -64,7 +65,8 @@ const ICON_KEYWORDS: ReadonlyArray<readonly [SoundIconKey, readonly string[]]> =
     ['coffee', ['coffee', 'tea', 'brew']],
     ['monitor', ['windows', 'startup', 'computer', 'desktop']],
     ['plane', ['airplane', 'plane', 'captain', 'flight']],
-    ['zap', ['whip', 'crack', 'zap', 'electric']],
+    ['zap', ['whip', 'crack', 'zap', 'electric','horror']],
+    ['human-voice',['sneeze','excuse','yawn','cough']]
   ];
 
 /** Lowercases and strips every non-alphanumeric character. */
