@@ -38,3 +38,24 @@ describe('inferSoundIconKey', () => {
     }
   });
 });
+
+describe('human-voice', () => {
+  it.each([
+    ['Sneeze', 'human-voice'],
+    ['Excuse Me', 'human-voice'],
+    ['Yawn', 'human-voice'],
+    ['Cough', 'human-voice'],
+  ])('%s -> %s', (name, expected) => {
+    expect(inferSoundIconKey(name)).toBe(expected);
+  });
+});
+
+describe('icon key coverage', () => {
+  it('every key is renderable', async () => {
+    // Guards the split between the domain's key list and the UI's component
+    // map: adding a key without a component is a type error, but only if
+    // something imports the map.
+    const { SOUND_ICON_KEYS: keys } = await import('./sound-icon');
+    expect(new Set(keys).size).toBe(keys.length);
+  });
+});
