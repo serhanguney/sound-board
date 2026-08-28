@@ -85,7 +85,12 @@ export function SoundBoard() {
           queue={queue}
           sounds={sounds}
           nowMs={nowMs}
-          onPlay={() => runner.play()}
+          onPlay={() => {
+            // Must run inside the click handler: this gesture is what grants
+            // the document permission to play sounds minutes from now.
+            void engine.unlock();
+            runner.play();
+          }}
           onHold={() => runner.hold()}
           onClear={() => runner.clear()}
           onAdd={() => setDialog({ sound: null })}

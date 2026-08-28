@@ -11,6 +11,11 @@ export interface PersistedValue<T> {
   readonly load: () => T | null;
   readonly save: (value: T) => void;
   readonly clear: () => void;
+  /**
+   * Notifies when another tab writes this key. `storage` only fires in *other*
+   * documents, so this never echoes the caller's own writes.
+   */
+  readonly subscribe: (onChange: (value: T | null) => void) => () => void;
 }
 
 export function createPersistedValue<T>(options: {
@@ -23,7 +28,7 @@ export function createPersistedValue<T>(options: {
 
   const isAvailable = () => typeof window !== 'undefined';
 
-  return {
+  const api: PersistedValue<T> = {
     load: () => {
       if (!isAvailable()) return null;
 
@@ -68,5 +73,19 @@ export function createPersistedValue<T>(options: {
         // ignored
       }
     },
+
+    subscribe: (onChange) => {
+      if (!isAvailable()) return () => {};
+
+      const handler = (event: StorageEvent) => {
+        if (event.key !== null && event.key !== key) return;
+        onChange(api.load());
+      };
+
+      window.addEventListener('storage', handler);
+      return () => window.removeEventListener('storage', handler);
+    },
   };
+
+  return api;
 }

@@ -75,6 +75,7 @@ export class AudioEngine {
   readonly #store = createExternalStore<AudioState>(INITIAL_STATE);
   readonly #events = createEmitter<AudioEvent>();
   readonly #elements = new Map<SoundId, HTMLAudioElement>();
+  #unlocked = false;
 
   get state(): ReadableStore<AudioState> {
     return this.#store;
@@ -82,6 +83,44 @@ export class AudioEngine {
 
   get events(): Pick<Emitter<AudioEvent>, 'on'> {
     return this.#events;
+  }
+
+  /**
+   * Satisfies the browser's autoplay policy.
+   *
+   * Chrome refuses `play()` on a document the user has never interacted with,
+   * which is exactly the situation a queue fires in: the sound plays minutes
+   * after the click that started the queue. Priming each element inside a real
+   * user gesture — a muted play/pause round trip — grants playback permission
+   * for the rest of the session.
+   *
+   * Must be called synchronously from a user-gesture handler to have any
+   * effect. Safe to call repeatedly; only the first call does work.
+   */
+  async unlock(): Promise<void> {
+    if (this.#unlocked) return;
+    this.#unlocked = true;
+
+    await Promise.allSettled(
+      [...this.#elements.values()]
+        .filter((element) => element.paused)
+        .map((element) => this.#prime(element))
+    );
+  }
+
+  async #prime(element: HTMLAudioElement): Promise<void> {
+    const { muted } = element;
+    element.muted = true;
+
+    try {
+      await element.play();
+      element.pause();
+      element.currentTime = 0;
+    } catch {
+      // Priming is best-effort; a real play() will surface any error.
+    } finally {
+      element.muted = muted;
+    }
   }
 
   /** Adds elements for new sounds and disposes those no longer present. */
@@ -112,6 +151,7 @@ export class AudioEngine {
 
     try {
       await element.play();
+      this.#unlocked = true;
       this.#store.setState((state) => ({
         ...state,
         playingSoundId: soundId,
@@ -187,6 +227,7 @@ export class AudioEngine {
 
   destroy(): void {
     for (const [id, element] of this.#elements) this.#dispose(id, element);
+    this.#unlocked = false;
     this.#store.setState(() => INITIAL_STATE);
   }
 
@@ -224,6 +265,9 @@ export class AudioEngine {
     });
 
     element.src = sound.url;
+    // The document already has playback permission; carry it to new elements.
+    if (this.#unlocked) void this.#prime(element);
+
     return element;
   }
 

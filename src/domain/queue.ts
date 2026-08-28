@@ -162,17 +162,37 @@ export const holdQueue = (queue: Queue, now: number): Queue =>
     : { ...queue, startedAt: null, heldElapsedMs: elapsedMs(queue, now) };
 
 /**
+ * How late an entry may be and still be worth playing.
+ *
+ * A tick that lands a few hundred milliseconds after a deadline should play the
+ * sound. One that lands twenty minutes late — because the tab was suspended —
+ * should not: the moment it was meant to punctuate has passed.
+ */
+export const STALE_AFTER_MS = 5_000;
+
+export interface QueueAdvance {
+  readonly queue: Queue;
+  /** The one entry worth playing now, if any. */
+  readonly fired: QueueEntry | null;
+  /** Entries passed over because their moment is gone. */
+  readonly skipped: readonly QueueEntry[];
+}
+
+/**
  * Advances past every entry whose deadline has passed.
  *
- * Returns the entries that became due together with the updated queue. A long
- * background suspension therefore resolves in a single step: each missed entry
- * is reported exactly once, in order, rather than replayed per tick.
+ * At most one sound is played per advance. When a tab wakes after a long
+ * suspension several deadlines may have elapsed at once; playing them all would
+ * fire a burst of overlapping sounds where each one cuts off the last. Only the
+ * most recent entry is played, and only if it is still fresh — the rest are
+ * reported as skipped so the UI can say what was missed.
  */
 export function advanceQueue(
   queue: Queue,
-  now: number
-): { queue: Queue; due: readonly QueueEntry[] } {
-  if (queue.startedAt === null) return { queue, due: [] };
+  now: number,
+  staleAfterMs: number = STALE_AFTER_MS
+): QueueAdvance {
+  if (queue.startedAt === null) return { queue, fired: null, skipped: [] };
 
   const offsets = entryOffsets(queue.entries);
   const elapsed = elapsedMs(queue, now);
@@ -182,7 +202,12 @@ export function advanceQueue(
       index >= queue.cursor && (offsets.at(index) ?? Infinity) <= elapsed
   );
 
-  if (due.length === 0) return { queue, due: [] };
+  if (due.length === 0) return { queue, fired: null, skipped: [] };
+
+  const lastIndex = queue.cursor + due.length - 1;
+  const lateBy = elapsed - (offsets.at(lastIndex) ?? elapsed);
+  const fired = lateBy <= staleAfterMs ? (due.at(-1) ?? null) : null;
+  const skipped = fired === null ? due : due.slice(0, -1);
 
   const cursor = queue.cursor + due.length;
   const drained = cursor >= queue.entries.length;
@@ -191,7 +216,8 @@ export function advanceQueue(
     queue: drained
       ? { ...queue, cursor, startedAt: null, heldElapsedMs: elapsed }
       : { ...queue, cursor },
-    due,
+    fired,
+    skipped,
   };
 }
 

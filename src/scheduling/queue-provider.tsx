@@ -20,7 +20,8 @@ export function QueueProvider({ children }: { children: ReactNode }) {
     const stopClock = runner.start();
 
     let persisted = runner.state.getSnapshot().queue;
-    const unsubscribe = runner.state.subscribe(() => {
+
+    const unsubscribeStore = runner.state.subscribe(() => {
       const { queue } = runner.state.getSnapshot();
       // The clock updates `nowMs` twice a second; only write on real changes.
       if (queue === persisted) return;
@@ -28,8 +29,18 @@ export function QueueProvider({ children }: { children: ReactNode }) {
       queueStorage.save(queue);
     });
 
+    // Two tabs would otherwise each run their own copy of the queue, firing
+    // sounds from a tab whose UI shows something else entirely. Adopting the
+    // other tab's state keeps every open tab showing the same queue.
+    const unsubscribeTabs = queueStorage.subscribe((queue) => {
+      if (queue === null) return;
+      persisted = queue;
+      runner.replaceQueue(queue);
+    });
+
     return () => {
-      unsubscribe();
+      unsubscribeStore();
+      unsubscribeTabs();
       stopClock();
     };
   }, [runner]);

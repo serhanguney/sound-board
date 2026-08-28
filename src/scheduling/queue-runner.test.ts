@@ -21,13 +21,16 @@ const entry = (label: string, gapMinutes: number): QueueEntry =>
 let runner: QueueRunner;
 let stop: () => void;
 let fired: string[];
+let skipped: string[];
 
 beforeEach(() => {
   vi.useFakeTimers();
   vi.setSystemTime(START);
   runner = new QueueRunner();
   fired = [];
+  skipped = [];
   runner.fired.on(({ entry: e }) => fired.push(e.label));
+  runner.skipped.on(({ entries }) => skipped.push(...entries.map((e) => e.label)));
   stop = runner.start();
 });
 
@@ -87,15 +90,48 @@ describe('QueueRunner', () => {
     expect(fired).toEqual(['a']);
   });
 
-  it('reports each missed entry exactly once after a long suspension', () => {
+  it('plays nothing and reports every entry as skipped after a long suspension', () => {
+    // The bug this covers: waking up fired all three at once, each cutting off
+    // the last, so one apparently random sound played.
     for (const label of ['a', 'b', 'c']) runner.add(entry(label, 1));
     runner.play();
 
     suspendThenResume(minutesToMs(60));
 
-    expect(fired).toEqual(['a', 'b', 'c']);
+    expect(fired).toEqual([]);
+    expect(skipped).toEqual(['a', 'b', 'c']);
+  });
+
+  it('does not report the same entry twice', () => {
+    for (const label of ['a', 'b']) runner.add(entry(label, 1));
+    runner.play();
+
     suspendThenResume(minutesToMs(60));
-    expect(fired).toEqual(['a', 'b', 'c']);
+    suspendThenResume(minutesToMs(60));
+
+    expect(skipped).toEqual(['a', 'b']);
+  });
+
+  it('plays only the latest entry when a few came due during one suspension', () => {
+    for (const label of ['a', 'b']) runner.add(entry(label, 1));
+    runner.play();
+
+    // No ticks run for two minutes; on waking, 'a' is long past but 'b' has
+    // only just come due, so 'b' is the one still worth playing.
+    suspendThenResume(minutesToMs(2) + 1_000);
+
+    expect(fired).toEqual(['b']);
+    expect(skipped).toEqual(['a']);
+  });
+
+  it('still fires each entry on time when ticks run normally', () => {
+    for (const label of ['a', 'b']) runner.add(entry(label, 1));
+    runner.play();
+
+    vi.advanceTimersByTime(minutesToMs(2));
+
+    expect(fired).toEqual(['a', 'b']);
+    expect(skipped).toEqual([]);
   });
 
   it('stops firing while held and resumes where it left off', () => {

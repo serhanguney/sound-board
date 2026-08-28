@@ -1,6 +1,7 @@
 'use client';
 
 import {
+  elapsedMs,
   entryOffsets,
   formatRemaining,
   remainingMsOf,
@@ -31,15 +32,37 @@ export function QueueTimeline({
   const total = totalDurationMs(queue.entries);
   if (total === 0) return null;
 
+  // Progress is derived from wall-clock elapsed time, so it stays correct
+  // across a suspension instead of drifting with the tick count.
+  const elapsed = elapsedMs(queue, nowMs);
+  const progress = Math.min(100, Math.max(0, (elapsed / total) * 100));
+
   return (
-    <div className="relative pb-8 pt-1">
-      <div className="absolute left-0 right-0 top-[18px] h-px bg-line" aria-hidden />
+    <div className="relative px-5 pb-8 pt-1">
+      <div
+        className="absolute left-5 right-5 top-4 h-1.5 overflow-hidden rounded-full bg-line"
+        aria-hidden
+      >
+        <div
+          className="h-full rounded-full bg-accent transition-[width] duration-500 ease-linear"
+          style={{ width: `${progress}%` }}
+        />
+      </div>
+
+      <div
+        role="progressbar"
+        aria-label="Queue progress"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={Math.round(progress)}
+        className="sr-only"
+      />
 
       <ol className="relative flex h-9 list-none items-center">
         {queue.entries.map((entry, index) => {
           const offset = offsets.at(index) ?? 0;
           const remaining = remainingMsOf(queue, index, nowMs) ?? 0;
-          const fired = index < queue.cursor;
+          const consumed = index < queue.cursor;
 
           return (
             <li
@@ -50,7 +73,7 @@ export function QueueTimeline({
               <span
                 className={cn(
                   'flex h-9 w-9 items-center justify-center rounded-full border transition-opacity',
-                  fired
+                  consumed
                     ? 'border-line bg-background text-ink-subtle opacity-50'
                     : 'border-line bg-surface text-ink-muted'
                 )}
@@ -65,10 +88,13 @@ export function QueueTimeline({
               <span
                 className={cn(
                   'absolute left-1/2 top-11 -translate-x-1/2 whitespace-nowrap text-[11px] tabular-nums',
-                  fired ? 'text-ink-subtle line-through' : 'text-ink-muted'
+                  consumed ? 'text-ink-subtle line-through' : 'text-ink-muted'
                 )}
               >
-                {queue.startedAt === null
+                {/* A consumed entry may have played or been skipped as
+                    stale, so show its scheduled offset rather than claiming
+                    either. */}
+                {consumed || queue.startedAt === null
                   ? `+${formatRemaining(offset)}`
                   : `in ${formatRemaining(remaining)}`}
               </span>

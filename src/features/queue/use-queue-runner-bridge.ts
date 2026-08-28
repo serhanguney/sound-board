@@ -53,6 +53,18 @@ export function useQueueAudioBridge(sounds: readonly Sound[]): void {
 
   useEffect(
     () =>
+      runner.skipped.on(({ entries }) => {
+        toast({
+          title: `Skipped ${entries.length} queued ${entries.length === 1 ? 'sound' : 'sounds'}`,
+          description:
+            'Their moment passed while the tab was inactive, so they were not played.',
+        });
+      }),
+    [runner]
+  );
+
+  useEffect(
+    () =>
       engine.events.on((event) => {
         if (event.type !== 'failed') return;
         toast({

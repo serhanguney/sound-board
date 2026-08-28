@@ -29,6 +29,10 @@ export interface EntryFired {
   readonly entry: QueueEntry;
 }
 
+export interface EntriesSkipped {
+  readonly entries: readonly QueueEntry[];
+}
+
 /** Countdown refresh rate. Firing accuracy does not depend on this value. */
 const TICK_MS = 500;
 
@@ -49,6 +53,7 @@ export class QueueRunner {
     nowMs: truncateToSecond(Date.now()),
   });
   readonly #fired = createEmitter<EntryFired>();
+  readonly #skipped = createEmitter<EntriesSkipped>();
 
   #intervalId: ReturnType<typeof setInterval> | null = null;
   #deadlineTimeoutId: ReturnType<typeof setTimeout> | null = null;
@@ -60,6 +65,11 @@ export class QueueRunner {
 
   get fired(): Pick<Emitter<EntryFired>, 'on'> {
     return this.#fired;
+  }
+
+  /** Entries passed over because the tab was inactive when they came due. */
+  get skipped(): Pick<Emitter<EntriesSkipped>, 'on'> {
+    return this.#skipped;
   }
 
   start(): Unsubscribe {
@@ -131,9 +141,9 @@ export class QueueRunner {
   #tick(): void {
     const now = Date.now();
     const { queue } = this.#store.getSnapshot();
-    const { queue: next, due } = advanceQueue(queue, now);
+    const { queue: next, fired, skipped } = advanceQueue(queue, now);
 
-    if (due.length > 0) {
+    if (fired !== null || skipped.length > 0) {
       // Publish the advanced queue before emitting, so no subscriber can
       // observe an entry that has fired but not yet been consumed.
       this.#store.setState(() => ({
@@ -141,7 +151,8 @@ export class QueueRunner {
         nowMs: truncateToSecond(now),
       }));
 
-      for (const entry of due) this.#fired.emit({ entry });
+      if (skipped.length > 0) this.#skipped.emit({ entries: skipped });
+      if (fired !== null) this.#fired.emit({ entry: fired });
       this.#armDeadlineTimer();
       return;
     }

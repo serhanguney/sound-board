@@ -60,9 +60,10 @@ describe('start semantics', () => {
   it('does not fire anything while idle, however much time passes', () => {
     // The core guarantee: a queue prepared before a meeting stays inert.
     const idle = queueOf(1, 1, 1);
-    const { queue, due } = advanceQueue(idle, NOW + minutesToMs(600));
+    const { queue, fired, skipped } = advanceQueue(idle, NOW + minutesToMs(600));
 
-    expect(due).toEqual([]);
+    expect(fired).toBeNull();
+    expect(skipped).toEqual([]);
     expect(queue).toBe(idle);
     expect(queueStatus(queue)).toBe('idle');
   });
@@ -138,20 +139,47 @@ describe('hold and resume', () => {
 });
 
 describe('advanceQueue', () => {
-  it('yields entries whose deadline has passed, in order', () => {
-    const running = startQueue(queueOf(1, 1, 30), NOW);
-    const { queue, due } = advanceQueue(running, NOW + minutesToMs(2));
+  it('plays an entry that has just come due', () => {
+    const running = startQueue(queueOf(1), NOW);
+    const { fired } = advanceQueue(running, NOW + minutesToMs(1) + 200);
 
-    expect(due.map((e) => e.label)).toEqual(['s0', 's1']);
-    expect(queue.cursor).toBe(2);
+    expect(fired?.label).toBe('s0');
   });
 
-  it('reports each missed entry exactly once after a long suspension', () => {
+  it('plays only the most recent entry when several came due at once', () => {
+    // Waking after a suspension must not fire a burst of overlapping sounds.
     const running = startQueue(queueOf(1, 1, 1), NOW);
-    const { queue, due } = advanceQueue(running, NOW + minutesToMs(60));
+    const { fired, skipped } = advanceQueue(
+      running,
+      NOW + minutesToMs(3) + 200
+    );
 
-    expect(due).toHaveLength(3);
-    expect(advanceQueue(queue, NOW + minutesToMs(120)).due).toEqual([]);
+    expect(fired?.label).toBe('s2');
+    expect(skipped.map((e) => e.label)).toEqual(['s0', 's1']);
+  });
+
+  it('plays nothing when even the latest entry is stale', () => {
+    const running = startQueue(queueOf(1, 1, 1), NOW);
+    const { fired, skipped } = advanceQueue(running, NOW + minutesToMs(60));
+
+    expect(fired).toBeNull();
+    expect(skipped.map((e) => e.label)).toEqual(['s0', 's1', 's2']);
+  });
+
+  it('consumes every due entry exactly once', () => {
+    const running = startQueue(queueOf(1, 1, 1), NOW);
+    const first = advanceQueue(running, NOW + minutesToMs(60));
+
+    const second = advanceQueue(first.queue, NOW + minutesToMs(120));
+    expect(second.fired).toBeNull();
+    expect(second.skipped).toEqual([]);
+  });
+
+  it('advances the cursor past everything due', () => {
+    const running = startQueue(queueOf(1, 1, 30), NOW);
+    const { queue } = advanceQueue(running, NOW + minutesToMs(2) + 200);
+
+    expect(queue.cursor).toBe(2);
   });
 
   it('returns to idle once drained', () => {
@@ -173,7 +201,7 @@ describe('advanceQueue', () => {
 describe('removeEntry', () => {
   it('keeps the cursor pointing at the same upcoming entry', () => {
     const running = startQueue(queueOf(1, 1, 30), NOW);
-    const { queue } = advanceQueue(running, NOW + minutesToMs(2));
+    const { queue } = advanceQueue(running, NOW + minutesToMs(2) + 200);
     expect(queue.cursor).toBe(2);
 
     const firstId = queue.entries[0]!.id;
