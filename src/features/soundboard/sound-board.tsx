@@ -64,11 +64,7 @@ export function SoundBoard() {
 
   return (
     <div className="min-h-screen bg-background">
-      <TopBar
-        query={query}
-        onQueryChange={setQuery}
-        onAddToQueue={() => setDialog({ sound: null })}
-      />
+      <TopBar query={query} onQueryChange={setQuery} />
 
       <main className="mx-auto max-w-[1400px] space-y-8 px-6 py-8">
         {isError && (
