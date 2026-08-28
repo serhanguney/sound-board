@@ -1,5 +1,7 @@
 'use client';
 
+import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { ChevronDown, ChevronUp, CornerDownLeft, GripVertical, X } from 'lucide-react';
 import type { QueueEntryId } from '@/domain/ids';
 import {
@@ -49,6 +51,13 @@ export function QueueEntryList({
   onMove: (from: number, to: number) => void;
   onRemove: (id: QueueEntryId) => void;
 }) {
+  // The dialog is `transform`ed, and a transformed ancestor becomes the
+  // containing block for `position: fixed` descendants — the lifted card would
+  // be placed relative to the dialog rather than the viewport, landing far to
+  // the right. Portalling to the body escapes that.
+  const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null);
+  useEffect(() => setPortalTarget(document.body), []);
+
   const offsets = entryOffsets(entries);
   const { fromIndex, toIndex, pointer, registerRow, start } = useReorder({
     count: entries.length,
@@ -190,32 +199,36 @@ export function QueueEntryList({
       </ul>
 
       {/* The lifted card follows the pointer outside the list's flow. */}
-      {draggedEntry && pointer && (
-        <div
-          className="pointer-events-none fixed z-50 flex w-[420px] max-w-[80vw] -translate-y-1/2 items-center gap-2.5 rounded-[9px] border border-accent bg-accent-soft px-2.5 py-2 shadow-[0_10px_24px_-4px_hsl(var(--sb-ink)/0.22)]"
-          style={{ left: pointer.x - 24, top: pointer.y, rotate: '-1.5deg' }}
-          aria-hidden
-        >
-          <GripVertical className="h-3 w-3 text-accent" />
-          <span className="flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-[7px] bg-surface text-ink-muted">
-            <SoundIcon
-              iconKey={describeEntry(draggedEntry, sounds).iconKey}
-              className="h-3.5 w-3.5"
-            />
-          </span>
-          <span className="min-w-0 flex-1">
-            <span className="block truncate text-[12.5px] font-semibold text-ink">
-              {draggedEntry.label}
+      {draggedEntry &&
+        pointer &&
+        portalTarget &&
+        createPortal(
+          <div
+            className="pointer-events-none fixed z-[60] flex w-[420px] max-w-[80vw] -translate-y-1/2 items-center gap-2.5 rounded-[9px] border border-accent bg-accent-soft px-2.5 py-2 shadow-[0_10px_24px_-4px_hsl(var(--sb-ink)/0.22)]"
+            style={{ left: pointer.x + 12, top: pointer.y, rotate: '-1.5deg' }}
+            aria-hidden
+          >
+            <GripVertical className="h-3 w-3 text-accent" />
+            <span className="flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-[7px] bg-surface text-ink-muted">
+              <SoundIcon
+                iconKey={describeEntry(draggedEntry, sounds).iconKey}
+                className="h-3.5 w-3.5"
+              />
             </span>
-            <span className="block text-[10.5px] text-ink-muted">
-              dragging · release to drop here
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-[12.5px] font-semibold text-ink">
+                {draggedEntry.label}
+              </span>
+              <span className="block text-[10.5px] text-ink-muted">
+                dragging · release to drop here
+              </span>
             </span>
-          </span>
-          <span className="font-display text-xs font-semibold tabular-nums text-accent">
-            {formatOffset(offsets.at(toIndex ?? 0) ?? 0)}
-          </span>
-        </div>
-      )}
+            <span className="font-display text-xs font-semibold tabular-nums text-accent">
+              {formatOffset(offsets.at(toIndex ?? 0) ?? 0)}
+            </span>
+          </div>,
+          portalTarget
+        )}
     </>
   );
 }

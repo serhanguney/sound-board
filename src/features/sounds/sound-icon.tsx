@@ -6,7 +6,7 @@ import {
   Crosshair,
   Drum,
   Megaphone,
-  MicVocal,
+  MicSignal,
   Monitor,
   Music,
   PartyPopper,
@@ -17,8 +17,9 @@ import {
   ThumbsDown,
   Timer,
   TrendingDown,
+  TriangleAlert,
   Trophy,
-  XCircle,
+  
   Zap,
   type LucideIcon,
 } from 'lucide-react';
@@ -38,7 +39,7 @@ const ICON_BY_KEY: Readonly<Record<SoundIconKey, LucideIcon>> = {
   coffee: Coffee,
   drum: Drum,
   gunshot: Crosshair,
-  'human-voice': MicVocal,
+  'human-voice': MicSignal,
   laugh: Smile,
   megaphone: Megaphone,
   monitor: Monitor,
@@ -49,7 +50,7 @@ const ICON_BY_KEY: Readonly<Record<SoundIconKey, LucideIcon>> = {
   sparkles: Sparkles,
   timer: Timer,
   trophy: Trophy,
-  wrong: XCircle,
+  wrong: TriangleAlert,
   zap: Zap,
 };
 
