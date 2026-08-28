@@ -41,11 +41,25 @@
     --sb-tag-calm: 152 82% 39%;
     --sb-tag-calm-soft: 150 59% 93%;
 
-    --sb-tag-mundane: 220 9% 55%;
-    --sb-tag-mundane-soft: 220 14% 95%;
+    /*
+     * Tags added after the original five. The five above come from the design
+     * and already occupy hues 45 / 152 / 212 / 250 / 330, so a new tag has to
+     * either claim the remaining gap around 290 or separate itself by
+     * saturation instead of hue.
+     *
+     * `fun` takes that gap but sits deeper and less saturated than `lame`
+     * (250 100% 69%), which is its nearest neighbour — at dot size, hue alone
+     * would not tell them apart.
+     *
+     * `mundane` is the only desaturated tag, which is both what it means and
+     * what makes it unmistakable.
+     */
+    --sb-tag-fun: 291 72% 47%;
+    --sb-tag-fun-soft: 291 62% 95%;
+    --sb-tag-mundane: 220 9% 46%;
+    --sb-tag-mundane-soft: 220 14% 94%;
 
-    --sb-tag-fun: 291 64% 58%;
-    --sb-tag-fun-soft: 291 60% 95%;
+
 
     --sb-radius-sm: 10px;
     --sb-radius-md: 16px;
