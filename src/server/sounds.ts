@@ -4,6 +4,7 @@ import { list, put } from '@vercel/blob';
 import { z } from 'zod';
 import { soundFromBlob, type Sound } from '@/domain/sound';
 import { inferSoundIconKey } from '@/domain/sound-icon';
+import { joinTagSuffix, soundTagSchema } from '@/domain/sound-tag';
 
 const SOUND_PREFIX = 'sounds/';
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
@@ -21,6 +22,7 @@ export async function listSounds(): Promise<readonly Sound[]> {
 
 const uploadInputSchema = z.object({
   displayName: z.string().trim().min(1).max(60),
+  tag: soundTagSchema,
   file: z
     .instanceof(File)
     .refine((file) => file.size > 0, 'The file is empty.')
@@ -44,9 +46,16 @@ const toSlug = (value: string): string =>
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-|-$/g, '');
 
+/**
+ * Stores the sound as `sounds/<slug>--<tag>.<ext>`.
+ *
+ * The tag lives in the filename so the blob listing alone is enough to render
+ * the board — there is no manifest that could drift out of sync with the files.
+ */
 export async function uploadSound(formData: FormData): Promise<UploadResult> {
   const parsed = uploadInputSchema.safeParse({
     displayName: formData.get('displayName'),
+    tag: formData.get('tag'),
     file: formData.get('file'),
   });
 
@@ -57,16 +66,17 @@ export async function uploadSound(formData: FormData): Promise<UploadResult> {
     };
   }
 
-  const { file, displayName } = parsed.data;
+  const { file, displayName, tag } = parsed.data;
   const slug = toSlug(displayName);
   if (!slug) {
     return { ok: false, error: 'The display name has no usable characters.' };
   }
 
   const extension = file.name.split('.').at(-1)?.toLowerCase() ?? 'mp3';
+  const pathname = `${SOUND_PREFIX}${joinTagSuffix(slug, tag)}.${extension}`;
 
   try {
-    const blob = await put(`${SOUND_PREFIX}${slug}.${extension}`, file, {
+    const blob = await put(pathname, file, {
       access: 'public',
       contentType: file.type,
       addRandomSuffix: false,
@@ -80,6 +90,7 @@ export async function uploadSound(formData: FormData): Promise<UploadResult> {
         displayName,
         url: blob.url,
         iconKey: inferSoundIconKey(displayName),
+        tag,
       },
     };
   } catch (error) {

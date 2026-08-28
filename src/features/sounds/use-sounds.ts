@@ -2,6 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { Sound } from '@/domain/sound';
+import type { SoundTag } from '@/domain/sound-tag';
 import { listSounds, uploadSound } from '@/server/sounds';
 import { toast } from '@/hooks/use-toast';
 
@@ -21,10 +22,15 @@ export function useUploadSound() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (input: { file: File; displayName: string }) => {
+    mutationFn: async (input: {
+      file: File;
+      displayName: string;
+      tag: SoundTag;
+    }) => {
       const formData = new FormData();
       formData.set('file', input.file);
       formData.set('displayName', input.displayName);
+      formData.set('tag', input.tag);
 
       const result = await uploadSound(formData);
       if (!result.ok) throw new Error(result.error);

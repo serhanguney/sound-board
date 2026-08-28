@@ -12,6 +12,13 @@ export interface AudioState {
   readonly failedSoundIds: ReadonlySet<SoundId>;
   readonly loopingSoundIds: ReadonlySet<SoundId>;
   readonly volume: number;
+  /**
+   * Clip length in seconds, filled in from each element's `loadedmetadata`
+   * event. The board renders a placeholder until an entry appears, which is
+   * cheaper and more accurate than downloading every file a second time just
+   * to measure it.
+   */
+  readonly durations: ReadonlyMap<SoundId, number>;
 }
 
 export type AudioEvent =
@@ -28,6 +35,7 @@ const INITIAL_STATE: AudioState = {
   failedSoundIds: new Set(),
   loopingSoundIds: new Set(),
   volume: 0.7,
+  durations: new Map(),
 };
 
 const withAdded = <T>(set: ReadonlySet<T>, value: T): ReadonlySet<T> =>
@@ -37,6 +45,13 @@ const withRemoved = <T>(set: ReadonlySet<T>, value: T): ReadonlySet<T> => {
   if (!set.has(value)) return set;
   const next = new Set(set);
   next.delete(value);
+  return next;
+};
+
+const withoutKey = <K, V>(map: ReadonlyMap<K, V>, key: K): ReadonlyMap<K, V> => {
+  if (!map.has(key)) return map;
+  const next = new Map(map);
+  next.delete(key);
   return next;
 };
 
@@ -52,8 +67,9 @@ const withRemoved = <T>(set: ReadonlySet<T>, value: T): ReadonlySet<T> => {
  *   render, so `ended` can never observe a stale `playingSoundId`.
  * - Looping is native `audio.loop` only; there is no second, competing
  *   implementation in the `ended` handler.
- * - Playback duration comes from the element's own `ended` event rather than
- *   from downloading each file a second time to measure it.
+ * - Playback end and clip length come from the element's own `ended` and
+ *   `loadedmetadata` events, rather than from downloading each file a second
+ *   time to measure it.
  */
 export class AudioEngine {
   readonly #store = createExternalStore<AudioState>(INITIAL_STATE);
@@ -179,6 +195,20 @@ export class AudioEngine {
     element.preload = 'metadata';
     element.volume = this.#store.getSnapshot().volume;
 
+    element.addEventListener('loadedmetadata', () => {
+      const seconds = element.duration;
+      if (!Number.isFinite(seconds) || seconds <= 0) return;
+
+      this.#store.setState((state) =>
+        state.durations.get(sound.id) === seconds
+          ? state
+          : {
+              ...state,
+              durations: new Map(state.durations).set(sound.id, seconds),
+            }
+      );
+    });
+
     element.addEventListener('ended', () => {
       // `loop` handles repetition natively; `ended` only fires for one-shots.
       this.#store.setState((state) =>
@@ -219,6 +249,7 @@ export class AudioEngine {
         state.playingSoundId === soundId ? null : state.playingSoundId,
       failedSoundIds: withRemoved(state.failedSoundIds, soundId),
       loopingSoundIds: withRemoved(state.loopingSoundIds, soundId),
+      durations: withoutKey(state.durations, soundId),
     }));
   }
 }

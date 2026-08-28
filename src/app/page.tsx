@@ -5,9 +5,13 @@ const uploadEnabled = process.env.NEXT_PUBLIC_UPLOAD_ENABLED === 'true';
 
 export default function HomePage() {
   return (
-    <main className="container mx-auto flex flex-col items-center gap-6 px-4 py-8">
-      {uploadEnabled && <UploadSoundForm />}
+    <>
       <SoundBoard />
-    </main>
+      {uploadEnabled && (
+        <div className="mx-auto max-w-[1400px] px-6 pb-12">
+          <UploadSoundForm />
+        </div>
+      )}
+    </>
   );
 }

@@ -1,15 +1,24 @@
 import {
+  AlarmClock,
   Bell,
+  Bug,
+  Coffee,
   Crosshair,
   Drum,
-  Frown,
-  Laugh,
+  Megaphone,
+  Monitor,
   Music,
+  PartyPopper,
+  Plane,
   Shuffle,
+  Smile,
+  Sparkles,
   ThumbsDown,
-  ThumbsUp,
   Timer,
+  TrendingDown,
   Trophy,
+  XCircle,
+  Zap,
   type LucideIcon,
 } from 'lucide-react';
 import type { SoundIconKey } from '@/domain/sound-icon';
@@ -20,17 +29,26 @@ import { cn } from '@/lib/utils';
  * objects carry the key; only this module knows about lucide.
  */
 const ICON_BY_KEY: Readonly<Record<SoundIconKey, LucideIcon>> = {
-  clock: Timer,
-  applause: ThumbsUp,
-  boo: ThumbsDown,
-  drum: Drum,
+  alarm: AlarmClock,
+  applause: PartyPopper,
   bell: Bell,
-  trophy: Trophy,
-  laugh: Laugh,
+  boo: ThumbsDown,
+  bug: Bug,
+  coffee: Coffee,
+  drum: Drum,
   gunshot: Crosshair,
-  sad: Frown,
+  laugh: Smile,
+  megaphone: Megaphone,
+  monitor: Monitor,
   music: Music,
+  plane: Plane,
+  sad: TrendingDown,
   shuffle: Shuffle,
+  sparkles: Sparkles,
+  timer: Timer,
+  trophy: Trophy,
+  wrong: XCircle,
+  zap: Zap,
 };
 
 export function SoundIcon({
@@ -41,5 +59,5 @@ export function SoundIcon({
   className?: string;
 }) {
   const Icon = ICON_BY_KEY[iconKey];
-  return <Icon className={cn('h-6 w-6', className)} aria-hidden />;
+  return <Icon className={cn('h-[18px] w-[18px]', className)} aria-hidden />;
 }

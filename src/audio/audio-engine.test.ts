@@ -9,6 +9,7 @@ const makeSound = (id: string): Sound => ({
   displayName: id,
   url: `https://blob.example.com/sounds/${id}.mp3`,
   iconKey: 'music',
+  tag: 'chaos',
 });
 
 const bell = makeSound('bell');

@@ -4,23 +4,16 @@ import { useRef, useState } from 'react';
 import type { ChangeEvent, FormEvent } from 'react';
 import { AlertCircle, Check, Upload, X } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Button } from '@/components/ui/button';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { displayNameFromFilename } from '@/domain/sound';
+import { parseSoundPath } from '@/domain/sound';
+import { SOUND_TAGS, type SoundTag } from '@/domain/sound-tag';
+import { cn } from '@/lib/utils';
+import { TagChip } from './tag-badge';
 import { useUploadSound } from './use-sounds';
 
 export function UploadSoundForm({ onUploaded }: { onUploaded?: () => void }) {
   const [file, setFile] = useState<File | null>(null);
   const [displayName, setDisplayName] = useState('');
+  const [tag, setTag] = useState<SoundTag | null>(null);
   const [validationError, setValidationError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -29,6 +22,7 @@ export function UploadSoundForm({ onUploaded }: { onUploaded?: () => void }) {
   const reset = () => {
     setFile(null);
     setDisplayName('');
+    setTag(null);
     setValidationError(null);
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
@@ -45,7 +39,11 @@ export function UploadSoundForm({ onUploaded }: { onUploaded?: () => void }) {
 
     setFile(selected);
     setValidationError(null);
-    setDisplayName(displayNameFromFilename(selected.name));
+
+    // A file already named `whip-crack--drive.mp3` pre-fills both fields.
+    const parsed = parseSoundPath(selected.name);
+    setDisplayName(parsed.displayName);
+    if (parsed.tag !== 'untagged') setTag(parsed.tag);
   };
 
   const handleSubmit = (event: FormEvent) => {
@@ -55,10 +53,11 @@ export function UploadSoundForm({ onUploaded }: { onUploaded?: () => void }) {
     if (!displayName.trim()) {
       return setValidationError('Please enter a display name.');
     }
+    if (tag === null) return setValidationError('Please pick a tag.');
 
     // Reset on success only — a failed upload keeps the user's input.
     mutate(
-      { file, displayName: displayName.trim() },
+      { file, displayName: displayName.trim(), tag },
       {
         onSuccess: () => {
           reset();
@@ -72,73 +71,91 @@ export function UploadSoundForm({ onUploaded }: { onUploaded?: () => void }) {
     validationError ?? (error instanceof Error ? error.message : null);
 
   return (
-    <Card className="mx-auto mb-8 w-full max-w-md">
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Upload className="h-5 w-5" aria-hidden />
+    <form
+      onSubmit={handleSubmit}
+      className="mx-auto w-full max-w-md space-y-4 rounded-lg border border-line bg-surface p-6 shadow-panel"
+    >
+      <div className="space-y-1">
+        <h2 className="flex items-center gap-2 font-display text-[17px] font-semibold text-ink">
+          <Upload className="h-4 w-4" aria-hidden />
           Upload sound
-        </CardTitle>
-        <CardDescription>Add your own sound to the board.</CardDescription>
-      </CardHeader>
+        </h2>
+        <p className="text-[13px] text-ink-subtle">
+          The tag is stored in the filename, so it travels with the file.
+        </p>
+      </div>
 
-      <form onSubmit={handleSubmit}>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="sound-file">Sound file</Label>
-            <Input
-              id="sound-file"
-              type="file"
-              accept="audio/*"
-              onChange={handleFileChange}
-              disabled={isPending}
-              ref={fileInputRef}
-              className="cursor-pointer"
+      <label className="block space-y-1.5">
+        <span className="text-[13px] font-medium text-ink">Sound file</span>
+        <input
+          type="file"
+          accept="audio/*"
+          onChange={handleFileChange}
+          disabled={isPending}
+          ref={fileInputRef}
+          className="w-full cursor-pointer rounded-sm border border-line bg-surface px-3 py-2 text-[13px] text-ink-muted file:mr-3 file:rounded-sm file:border-0 file:bg-background file:px-3 file:py-1.5 file:text-[13px] file:text-ink"
+        />
+        {file && (
+          <span className="block text-[11px] text-ink-subtle">
+            {file.name} ({(file.size / 1024).toFixed(1)} KB)
+          </span>
+        )}
+      </label>
+
+      <label className="block space-y-1.5">
+        <span className="text-[13px] font-medium text-ink">Display name</span>
+        <input
+          value={displayName}
+          onChange={(event) => setDisplayName(event.target.value)}
+          placeholder="How the card will be labelled"
+          disabled={isPending}
+          className="w-full rounded-sm border border-line bg-surface px-3 py-2.5 text-sm text-ink placeholder:text-ink-subtle focus-visible:border-line-strong focus-visible:outline-none"
+        />
+      </label>
+
+      <fieldset className="space-y-1.5">
+        <legend className="text-[13px] font-medium text-ink">Tag</legend>
+        <div className="flex flex-wrap gap-2">
+          {SOUND_TAGS.map((value) => (
+            <TagChip
+              key={value}
+              tag={value}
+              selected={tag === value}
+              onClick={() => setTag(value)}
             />
-            {file && (
-              <p className="text-sm text-muted-foreground">
-                {file.name} ({(file.size / 1024).toFixed(1)} KB)
-              </p>
-            )}
-          </div>
+          ))}
+        </div>
+      </fieldset>
 
-          <div className="space-y-2">
-            <Label htmlFor="display-name">Display name</Label>
-            <Input
-              id="display-name"
-              value={displayName}
-              onChange={(event) => setDisplayName(event.target.value)}
-              placeholder="How the button will be labelled"
-              disabled={isPending}
-            />
-          </div>
+      {message && (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" aria-hidden />
+          <AlertDescription>{message}</AlertDescription>
+        </Alert>
+      )}
 
-          {message && (
-            <Alert variant="destructive">
-              <AlertCircle className="h-4 w-4" aria-hidden />
-              <AlertDescription>{message}</AlertDescription>
-            </Alert>
+      <div className="flex justify-between gap-2">
+        <button
+          type="button"
+          onClick={reset}
+          disabled={isPending || (!file && !displayName)}
+          className="inline-flex items-center gap-2 rounded-sm border border-line-strong bg-surface px-3.5 py-2.5 text-[13px] font-medium text-ink transition-colors hover:bg-background disabled:opacity-40"
+        >
+          <X className="h-4 w-4" aria-hidden />
+          Clear
+        </button>
+        <button
+          type="submit"
+          disabled={isPending || !file || !displayName.trim() || tag === null}
+          className={cn(
+            'inline-flex items-center gap-2 rounded-sm bg-accent px-4 py-2.5 text-[13px] font-semibold text-accent-foreground transition-opacity hover:opacity-90',
+            'disabled:cursor-not-allowed disabled:opacity-40'
           )}
-        </CardContent>
-
-        <CardFooter className="flex justify-between">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={reset}
-            disabled={isPending || (!file && !displayName)}
-          >
-            <X className="mr-2 h-4 w-4" aria-hidden />
-            Clear
-          </Button>
-          <Button
-            type="submit"
-            disabled={isPending || !file || !displayName.trim()}
-          >
-            <Check className="mr-2 h-4 w-4" aria-hidden />
-            {isPending ? 'Uploading…' : 'Upload sound'}
-          </Button>
-        </CardFooter>
-      </form>
-    </Card>
+        >
+          <Check className="h-4 w-4" aria-hidden />
+          {isPending ? 'Uploading…' : 'Upload sound'}
+        </button>
+      </div>
+    </form>
   );
 }

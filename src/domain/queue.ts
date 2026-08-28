@@ -1,0 +1,219 @@
+import { z } from 'zod';
+import { newQueueEntryId, queueEntryIdSchema, soundIdSchema } from './ids';
+import { soundTagSchema } from './sound-tag';
+
+export const MIN_GAP_MINUTES = 0;
+export const MAX_GAP_MINUTES = 120;
+export const GAP_PRESETS_MINUTES = [2, 5, 10, 20] as const;
+
+const MS_PER_MINUTE = 60_000;
+
+export const minutesToMs = (minutes: number): number =>
+  Math.round(minutes * MS_PER_MINUTE);
+
+/** What an entry plays: a specific sound, or a random pick from one tag. */
+export const queueTargetSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('sound'), soundId: soundIdSchema }),
+  z.object({ kind: z.literal('random'), tag: soundTagSchema.nullable() }),
+]);
+
+export type QueueTarget = z.infer<typeof queueTargetSchema>;
+
+export const queueEntrySchema = z
+  .object({
+    id: queueEntryIdSchema,
+    target: queueTargetSchema,
+    label: z.string().min(1),
+    /**
+     * Delay after the *previous* entry fires — the design's "gap after previous
+     * sound". Absolute offsets are derived, never stored, so reordering or
+     * removing an entry cannot leave stale timings behind.
+     */
+    gapMs: z
+      .number()
+      .int()
+      .min(minutesToMs(MIN_GAP_MINUTES))
+      .max(minutesToMs(MAX_GAP_MINUTES)),
+  })
+  .readonly();
+
+export type QueueEntry = z.infer<typeof queueEntrySchema>;
+
+/**
+ * A queue is composed while idle and does nothing until it is started, so a
+ * meeting host can prepare one in advance and press play when the call begins.
+ *
+ * `startedAt` is the single source of truth for that: `null` means idle. Once
+ * set, every entry's deadline is `startedAt + cumulativeOffset`, which keeps
+ * the whole queue on absolute wall-clock time and immune to background-tab
+ * timer throttling.
+ */
+export const queueSchema = z
+  .object({
+    entries: z.array(queueEntrySchema).readonly(),
+    startedAt: z.number().int().positive().nullable(),
+    /** Index of the next entry to fire; equals `entries.length` when drained. */
+    cursor: z.number().int().nonnegative(),
+    /** Wall-clock ms already elapsed before the queue was last held. */
+    heldElapsedMs: z.number().int().nonnegative(),
+  })
+  .readonly();
+
+export type Queue = z.infer<typeof queueSchema>;
+
+export const EMPTY_QUEUE: Queue = {
+  entries: [],
+  startedAt: null,
+  cursor: 0,
+  heldElapsedMs: 0,
+};
+
+export type QueueStatus = 'empty' | 'idle' | 'running' | 'held' | 'finished';
+
+export function queueStatus(queue: Queue): QueueStatus {
+  if (queue.entries.length === 0) return 'empty';
+  if (queue.cursor >= queue.entries.length) return 'finished';
+  if (queue.startedAt !== null) return 'running';
+  return queue.heldElapsedMs > 0 ? 'held' : 'idle';
+}
+
+export function createEntry(input: {
+  target: QueueTarget;
+  label: string;
+  gapMs: number;
+}): QueueEntry {
+  return queueEntrySchema.parse({ ...input, id: newQueueEntryId() });
+}
+
+/** Cumulative offset from queue start for each entry, in order. */
+export function entryOffsets(entries: readonly QueueEntry[]): readonly number[] {
+  return entries.reduce<readonly number[]>(
+    (offsets, entry) => [
+      ...offsets,
+      (offsets.at(-1) ?? 0) + entry.gapMs,
+    ],
+    []
+  );
+}
+
+export function totalDurationMs(entries: readonly QueueEntry[]): number {
+  return entryOffsets(entries).at(-1) ?? 0;
+}
+
+/** Elapsed wall-clock time since the queue started, including held time. */
+export function elapsedMs(queue: Queue, now: number): number {
+  return queue.startedAt === null
+    ? queue.heldElapsedMs
+    : queue.heldElapsedMs + Math.max(0, now - queue.startedAt);
+}
+
+/** Absolute deadline of one entry, or `null` while the queue is not running. */
+export function deadlineOf(
+  queue: Queue,
+  index: number,
+  now: number
+): number | null {
+  if (queue.startedAt === null) return null;
+  const offset = entryOffsets(queue.entries).at(index);
+  if (offset === undefined) return null;
+
+  return now + (offset - elapsedMs(queue, now));
+}
+
+export function remainingMsOf(
+  queue: Queue,
+  index: number,
+  now: number
+): number | null {
+  const offset = entryOffsets(queue.entries).at(index);
+  if (offset === undefined) return null;
+
+  return Math.max(0, offset - elapsedMs(queue, now));
+}
+
+export const addEntry = (queue: Queue, entry: QueueEntry): Queue => ({
+  ...queue,
+  entries: [...queue.entries, entry],
+});
+
+export const removeEntry = (queue: Queue, id: QueueEntry['id']): Queue => {
+  const index = queue.entries.findIndex((entry) => entry.id === id);
+  if (index === -1) return queue;
+
+  return {
+    ...queue,
+    entries: queue.entries.filter((entry) => entry.id !== id),
+    // Keep the cursor pointing at the same upcoming entry.
+    cursor: index < queue.cursor ? Math.max(0, queue.cursor - 1) : queue.cursor,
+  };
+};
+
+export const clearQueue = (): Queue => EMPTY_QUEUE;
+
+export const startQueue = (queue: Queue, now: number): Queue =>
+  queue.startedAt !== null || queue.entries.length === 0
+    ? queue
+    : { ...queue, startedAt: now };
+
+/** Pauses without losing position: elapsed time is banked, deadlines re-derive. */
+export const holdQueue = (queue: Queue, now: number): Queue =>
+  queue.startedAt === null
+    ? queue
+    : { ...queue, startedAt: null, heldElapsedMs: elapsedMs(queue, now) };
+
+/**
+ * Advances past every entry whose deadline has passed.
+ *
+ * Returns the entries that became due together with the updated queue. A long
+ * background suspension therefore resolves in a single step: each missed entry
+ * is reported exactly once, in order, rather than replayed per tick.
+ */
+export function advanceQueue(
+  queue: Queue,
+  now: number
+): { queue: Queue; due: readonly QueueEntry[] } {
+  if (queue.startedAt === null) return { queue, due: [] };
+
+  const offsets = entryOffsets(queue.entries);
+  const elapsed = elapsedMs(queue, now);
+
+  const due = queue.entries.filter(
+    (_, index) =>
+      index >= queue.cursor && (offsets.at(index) ?? Infinity) <= elapsed
+  );
+
+  if (due.length === 0) return { queue, due: [] };
+
+  const cursor = queue.cursor + due.length;
+  const drained = cursor >= queue.entries.length;
+
+  return {
+    queue: drained
+      ? { ...queue, cursor, startedAt: null, heldElapsedMs: elapsed }
+      : { ...queue, cursor },
+    due,
+  };
+}
+
+/** Deadline of the next pending entry, or `null` when idle or drained. */
+export function nextDeadline(queue: Queue, now: number): number | null {
+  return queueStatus(queue) === 'running'
+    ? deadlineOf(queue, queue.cursor, now)
+    : null;
+}
+
+/** `m:ss`, or `h:mm:ss` past an hour. Clamped at zero. */
+export function formatRemaining(ms: number): string {
+  const totalSeconds = Math.max(0, Math.ceil(ms / 1000));
+  const seconds = totalSeconds % 60;
+  const minutes = Math.floor(totalSeconds / 60) % 60;
+  const hours = Math.floor(totalSeconds / 3600);
+  const pad = (value: number) => value.toString().padStart(2, '0');
+
+  return hours > 0
+    ? `${hours}:${pad(minutes)}:${pad(seconds)}`
+    : `${minutes}:${pad(seconds)}`;
+}
+
+/** `+m:ss` label used by the queue list and timeline. */
+export const formatOffset = (ms: number): string => `+${formatRemaining(ms)}`;

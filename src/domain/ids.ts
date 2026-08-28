@@ -12,12 +12,13 @@ export type SoundId = z.infer<typeof soundIdSchema>;
 export const scheduleIdSchema = z.string().min(1).brand<'ScheduleId'>();
 export type ScheduleId = z.infer<typeof scheduleIdSchema>;
 
-export const flowIdSchema = z.string().min(1).brand<'FlowId'>();
-export type FlowId = z.infer<typeof flowIdSchema>;
+export const queueEntryIdSchema = z.string().min(1).brand<'QueueEntryId'>();
+export type QueueEntryId = z.infer<typeof queueEntryIdSchema>;
 
 export const toSoundId = (value: string): SoundId => soundIdSchema.parse(value);
 
 export const newScheduleId = (): ScheduleId =>
   scheduleIdSchema.parse(crypto.randomUUID());
 
-export const newFlowId = (): FlowId => flowIdSchema.parse(crypto.randomUUID());
+export const newQueueEntryId = (): QueueEntryId =>
+  queueEntryIdSchema.parse(crypto.randomUUID());
