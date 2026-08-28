@@ -85,12 +85,18 @@ export function createEntry(input: {
   return queueEntrySchema.parse({ ...input, id: newQueueEntryId() });
 }
 
-/** Cumulative offset from queue start for each entry, in order. */
+/**
+ * Cumulative offset from queue start for each entry, in order.
+ *
+ * The first entry always lands at +0:00 — it is what the queue starts with, so
+ * it has no previous sound to be spaced from. Its stored `gapMs` is kept rather
+ * than zeroed, so moving it further down the queue restores its spacing.
+ */
 export function entryOffsets(entries: readonly QueueEntry[]): readonly number[] {
   return entries.reduce<readonly number[]>(
-    (offsets, entry) => [
+    (offsets, entry, index) => [
       ...offsets,
-      (offsets.at(-1) ?? 0) + entry.gapMs,
+      index === 0 ? 0 : (offsets.at(-1) ?? 0) + entry.gapMs,
     ],
     []
   );
@@ -147,6 +153,35 @@ export const removeEntry = (queue: Queue, id: QueueEntry['id']): Queue => {
     cursor: index < queue.cursor ? Math.max(0, queue.cursor - 1) : queue.cursor,
   };
 };
+
+/**
+ * Moves an entry to a new index, keeping every other entry's order.
+ *
+ * Offsets are never stored, only derived, so a move needs no recalculation —
+ * the entry simply takes its spacing from whatever now precedes it.
+ */
+export function moveEntry(queue: Queue, from: number, to: number): Queue {
+  const count = queue.entries.length;
+  const target = Math.min(count - 1, Math.max(0, to));
+
+  if (from < 0 || from >= count || from === target) return queue;
+
+  const without = queue.entries.filter((_, index) => index !== from);
+  const moved = queue.entries.at(from);
+  if (!moved) return queue;
+
+  return {
+    ...queue,
+    entries: [...without.slice(0, target), moved, ...without.slice(target)],
+  };
+}
+
+/** Where a newly picked sound lands: the front of the queue, at +0:00. */
+export const addEntryAtFront = (queue: Queue, entry: QueueEntry): Queue => ({
+  ...queue,
+  entries: [entry, ...queue.entries],
+  cursor: queue.cursor > 0 ? queue.cursor + 1 : queue.cursor,
+});
 
 export const clearQueue = (): Queue => EMPTY_QUEUE;
 
@@ -239,6 +274,16 @@ export function formatRemaining(ms: number): string {
   return hours > 0
     ? `${hours}:${pad(minutes)}:${pad(seconds)}`
     : `${minutes}:${pad(seconds)}`;
+}
+
+/** "1st", "2nd", "3rd", "4th"... for the candidate row's subtitle. */
+export function ordinal(index: number): string {
+  const position = index + 1;
+  const lastTwo = position % 100;
+  if (lastTwo >= 11 && lastTwo <= 13) return `${position}th`;
+
+  const suffix = { 1: 'st', 2: 'nd', 3: 'rd' }[position % 10] ?? 'th';
+  return `${position}${suffix}`;
 }
 
 /** `+m:ss` label used by the queue list and timeline. */

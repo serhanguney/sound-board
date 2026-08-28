@@ -61,6 +61,14 @@ export function SoundBoard() {
     (id: QueueEntry['id']) => runner.remove(id),
     [runner]
   );
+  const handleMove = useCallback(
+    (from: number, to: number) => runner.move(from, to),
+    [runner]
+  );
+  const handlePreview = useCallback(
+    (sound: Sound) => void engine.play(sound.id),
+    [engine]
+  );
 
   return (
     <div className="min-h-screen bg-background">
@@ -121,9 +129,12 @@ export function SoundBoard() {
         onOpenChange={(open) => !open && setDialog(null)}
         queue={queue}
         sounds={sounds}
+        durations={durations}
         presetSound={dialog?.sound ?? null}
         onAdd={handleAdd}
+        onMove={handleMove}
         onRemove={handleRemove}
+        onPreview={handlePreview}
       />
     </div>
   );

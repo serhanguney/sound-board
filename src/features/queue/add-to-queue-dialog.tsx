@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
-import { ListPlus, Minus, Plus, Shuffle, X } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { ListPlus, Minus, Plus, Shuffle } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -9,25 +9,22 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import type { QueueEntryId, SoundId } from '@/domain/ids';
 import {
   createEntry,
-  entryOffsets,
-  formatOffset,
   GAP_PRESETS_MINUTES,
   MAX_GAP_MINUTES,
   MIN_GAP_MINUTES,
   minutesToMs,
-  totalDurationMs,
   type Queue,
   type QueueEntry,
-  type QueueTarget,
 } from '@/domain/queue';
 import type { Sound } from '@/domain/sound';
 import { SOUND_TAGS, type SoundTag } from '@/domain/sound-tag';
-import { SoundIcon } from '@/features/sounds/sound-icon';
-import { TagChip, TagDot } from '@/features/sounds/tag-badge';
+import { TagChip } from '@/features/sounds/tag-badge';
 import { cn } from '@/lib/utils';
-import { describeEntry } from './queue-entry-icon';
+import { QueueEntryList } from './queue-entry-list';
+import { SoundCombobox } from './sound-combobox';
 
 type Mode = 'sound' | 'random';
 
@@ -39,67 +36,81 @@ export function AddToQueueDialog({
   onOpenChange,
   queue,
   sounds,
+  durations,
   presetSound,
   onAdd,
+  onMove,
   onRemove,
+  onPreview,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   queue: Queue;
   sounds: readonly Sound[];
+  durations: ReadonlyMap<SoundId, number>;
   /** Pre-selects a sound when opened from a card. */
   presetSound: Sound | null;
   onAdd: (entry: QueueEntry) => void;
-  onRemove: (id: QueueEntry['id']) => void;
+  onMove: (from: number, to: number) => void;
+  onRemove: (id: QueueEntryId) => void;
+  onPreview: (sound: Sound) => void;
 }) {
   const [mode, setMode] = useState<Mode>('sound');
-  const [soundId, setSoundId] = useState<Sound['id'] | null>(null);
   const [tag, setTag] = useState<SoundTag | null>(null);
-  const [gapMinutes, setGapMinutes] = useState(5);
+  const [gapMinutes, setGapMinutes] = useState(2);
+  const [candidateId, setCandidateId] = useState<QueueEntryId | null>(null);
+  const [recentIds, setRecentIds] = useState<readonly SoundId[]>([]);
+
+  const add = useCallback(
+    (input: { target: QueueEntry['target']; label: string }) => {
+      const entry = createEntry({ ...input, gapMs: minutesToMs(gapMinutes) });
+      onAdd(entry);
+      setCandidateId(entry.id);
+    },
+    [gapMinutes, onAdd]
+  );
+
+  const pickSound = useCallback(
+    (sound: Sound) => {
+      add({ target: { kind: 'sound', soundId: sound.id }, label: sound.displayName });
+      setRecentIds((current) => [
+        sound.id,
+        ...current.filter((id) => id !== sound.id),
+      ]);
+    },
+    [add]
+  );
 
   // Re-seed each time the dialog opens so it never shows a stale selection.
   useEffect(() => {
     if (!open) return;
-    setMode(presetSound ? 'sound' : 'random');
-    setSoundId(presetSound?.id ?? null);
+    // Picking a specific sound is the primary path, so the combobox is what
+    // the dialog opens on either way.
+    setMode('sound');
     setTag(null);
-    setGapMinutes(5);
+    setGapMinutes(2);
+    setCandidateId(null);
   }, [open, presetSound]);
 
-  const selectedSound = useMemo(
-    () => sounds.find((sound) => sound.id === soundId) ?? null,
-    [sounds, soundId]
-  );
+  // A card's queue button opens the dialog with that sound already added, so
+  // the first thing the user sees is where it landed. The ref guards against
+  // re-adding it when an unrelated render re-runs the effect.
+  const appliedPresetRef = useRef<SoundId | null>(null);
+  useEffect(() => {
+    if (!open) {
+      appliedPresetRef.current = null;
+      return;
+    }
+    if (!presetSound || appliedPresetRef.current === presetSound.id) return;
 
-  const target: QueueTarget | null =
-    mode === 'sound'
-      ? selectedSound
-        ? { kind: 'sound', soundId: selectedSound.id }
-        : null
-      : { kind: 'random', tag };
-
-  const label =
-    mode === 'sound'
-      ? (selectedSound?.displayName ?? '')
-      : tag
-        ? `Random · ${tag}`
-        : 'Random';
-
-  const landsAt = totalDurationMs(queue.entries) + minutesToMs(gapMinutes);
-  const offsets = entryOffsets(queue.entries);
-
-  const submit = () => {
-    if (!target) return;
-    onAdd(createEntry({ target, label, gapMs: minutesToMs(gapMinutes) }));
-    // Keep the dialog open so several entries can be queued in one sitting.
-    setGapMinutes(5);
-    if (mode === 'sound') setSoundId(null);
-  };
+    appliedPresetRef.current = presetSound.id;
+    pickSound(presetSound);
+  }, [open, presetSound, pickSound]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-xl gap-0 border-line bg-surface p-0">
-        <DialogHeader className="space-y-1 p-6 pb-4 text-left">
+      <DialogContent className="flex max-h-[90vh] max-w-xl flex-col gap-0 border-line bg-surface p-0">
+        <DialogHeader className="shrink-0 space-y-1 p-6 pb-4 text-left">
           <DialogTitle className="font-display text-xl font-semibold text-ink">
             Create a queue
           </DialogTitle>
@@ -109,7 +120,7 @@ export function AddToQueueDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-5 px-6">
+        <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-6 pb-2">
           <fieldset className="space-y-2">
             <legend className="text-[10px] font-bold uppercase tracking-[0.08em] text-ink-subtle">
               What to add
@@ -140,43 +151,38 @@ export function AddToQueueDialog({
             </div>
 
             {mode === 'sound' ? (
-              <label className="block">
-                <span className="sr-only">Sound</span>
-                <select
-                  value={soundId ?? ''}
-                  onChange={(event) =>
-                    setSoundId(
-                      event.target.value === ''
-                        ? null
-                        : (event.target.value as Sound['id'])
-                    )
-                  }
-                  className="w-full rounded-sm border border-line bg-surface px-3 py-2.5 text-sm text-ink outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                >
-                  <option value="">Choose a sound…</option>
-                  {sounds.map((sound) => (
-                    <option key={sound.id} value={sound.id}>
-                      {sound.displayName} · {sound.tag}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              <SoundCombobox
+                sounds={sounds}
+                durations={durations}
+                recentIds={recentIds}
+                onPick={pickSound}
+                onPreview={onPreview}
+              />
             ) : (
-              <div className="flex flex-wrap gap-2">
-                <TagChip
-                  tag="untagged"
-                  selected={tag === null}
-                  onClick={() => setTag(null)}
-                  className={cn(tag === null && 'border-ink bg-ink text-surface')}
-                />
-                {SOUND_TAGS.map((value) => (
-                  <TagChip
-                    key={value}
-                    tag={value}
-                    selected={tag === value}
-                    onClick={() => setTag(value)}
-                  />
-                ))}
+              <div className="space-y-2">
+                <div className="flex flex-wrap gap-2">
+                  {SOUND_TAGS.map((value) => (
+                    <TagChip
+                      key={value}
+                      tag={value}
+                      selected={tag === value}
+                      onClick={() => setTag(tag === value ? null : value)}
+                    />
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  onClick={() =>
+                    add({
+                      target: { kind: 'random', tag },
+                      label: tag ? `Random · ${tag}` : 'Random',
+                    })
+                  }
+                  className="inline-flex items-center gap-2 rounded-sm bg-accent px-4 py-2.5 text-[13px] font-semibold text-accent-foreground transition-opacity hover:opacity-90"
+                >
+                  <Shuffle className="h-4 w-4" aria-hidden />
+                  Add {tag ? `random ${tag}` : 'random sound'}
+                </button>
               </div>
             )}
           </fieldset>
@@ -185,6 +191,9 @@ export function AddToQueueDialog({
             <legend className="text-[10px] font-bold uppercase tracking-[0.08em] text-ink-subtle">
               Gap after previous sound
             </legend>
+            <p className="text-[11px] text-ink-subtle">
+              Applied once the sound is moved below the top of the queue.
+            </p>
 
             <div className="flex flex-wrap items-center gap-2">
               <div className="flex items-center gap-1 rounded-sm border border-line bg-surface">
@@ -225,11 +234,6 @@ export function AddToQueueDialog({
                   {preset}m
                 </button>
               ))}
-
-              <span className="flex-1" />
-              <span className="text-[13px] tabular-nums text-ink-subtle">
-                at {formatOffset(landsAt)}
-              </span>
             </div>
           </fieldset>
 
@@ -238,8 +242,9 @@ export function AddToQueueDialog({
               <h3 className="text-[10px] font-bold uppercase tracking-[0.08em] text-ink-subtle">
                 In this queue
               </h3>
-              <span className="text-xs tabular-nums text-ink-subtle">
+              <span className="text-xs text-ink-subtle">
                 {queue.entries.length}
+                {queue.entries.length > 1 && ' · drag to reorder'}
               </span>
             </div>
 
@@ -248,73 +253,25 @@ export function AddToQueueDialog({
                 Nothing queued yet.
               </p>
             ) : (
-              <ul className="max-h-56 space-y-1.5 overflow-y-auto">
-                {queue.entries.map((entry, index) => {
-                  const { iconKey, tag: entryTag, missing } = describeEntry(
-                    entry,
-                    sounds
-                  );
-
-                  return (
-                    <li
-                      key={entry.id}
-                      className="flex items-center gap-3 rounded-sm bg-background px-3 py-2.5"
-                    >
-                      <span className="flex h-7 w-7 items-center justify-center rounded-full bg-surface text-ink-muted">
-                        <SoundIcon iconKey={iconKey} className="h-3.5 w-3.5" />
-                      </span>
-
-                      <TagDot tag={entryTag} />
-                      <span
-                        className={cn(
-                          'flex-1 truncate text-[13px] font-medium',
-                          missing ? 'text-ink-subtle line-through' : 'text-ink'
-                        )}
-                      >
-                        {entry.label}
-                        {missing && ' (unavailable)'}
-                      </span>
-
-                      <span className="text-[13px] tabular-nums text-ink-subtle">
-                        {formatOffset(offsets.at(index) ?? 0)}
-                      </span>
-
-                      <button
-                        type="button"
-                        onClick={() => onRemove(entry.id)}
-                        aria-label={`Remove ${entry.label} from the queue`}
-                        className="text-ink-subtle transition-colors hover:text-ink"
-                      >
-                        <X className="h-4 w-4" aria-hidden />
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
+              <QueueEntryList
+                entries={queue.entries}
+                sounds={sounds}
+                candidateId={candidateId}
+                onMove={onMove}
+                onRemove={onRemove}
+              />
             )}
           </section>
         </div>
 
-        <footer className="mt-6 flex justify-end gap-2 border-t border-line px-6 py-4">
+        <footer className="mt-auto flex shrink-0 justify-end border-t border-line px-6 py-4">
           <button
             type="button"
             onClick={() => onOpenChange(false)}
-            className="rounded-sm border border-line-strong bg-surface px-4 py-2.5 text-[13px] font-medium text-ink transition-colors hover:bg-background"
+            className="inline-flex items-center gap-2 rounded-sm bg-ink px-4 py-2.5 text-[13px] font-semibold text-surface transition-opacity hover:opacity-90"
           >
+            <ListPlus className="h-4 w-4" aria-hidden />
             Done
-          </button>
-          <button
-            type="button"
-            onClick={submit}
-            disabled={target === null}
-            className="inline-flex items-center gap-2 rounded-sm bg-accent px-4 py-2.5 text-[13px] font-semibold text-accent-foreground transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            {mode === 'random' ? (
-              <Shuffle className="h-4 w-4" aria-hidden />
-            ) : (
-              <ListPlus className="h-4 w-4" aria-hidden />
-            )}
-            Add to queue
           </button>
         </footer>
       </DialogContent>

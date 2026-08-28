@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { toSoundId } from './ids';
 import {
   addEntry,
+  addEntryAtFront,
   advanceQueue,
   createEntry,
   deadlineOf,
@@ -12,7 +13,9 @@ import {
   formatRemaining,
   holdQueue,
   minutesToMs,
+  moveEntry,
   nextDeadline,
+  ordinal,
   queueStatus,
   removeEntry,
   remainingMsOf,
@@ -79,16 +82,18 @@ describe('start semantics', () => {
 });
 
 describe('entryOffsets', () => {
-  it('accumulates gaps into offsets from the start', () => {
+  it('starts the first entry at zero and accumulates the rest', () => {
+    // The first sound is what the queue opens with; it has no predecessor to
+    // be spaced from, so its own gap does not delay the start.
     expect(entryOffsets(queueOf(2, 5, 10).entries)).toEqual([
-      minutesToMs(2),
-      minutesToMs(7),
-      minutesToMs(17),
+      0,
+      minutesToMs(5),
+      minutesToMs(15),
     ]);
   });
 
   it('reports the total as the last offset', () => {
-    expect(totalDurationMs(queueOf(2, 5, 10).entries)).toBe(minutesToMs(17));
+    expect(totalDurationMs(queueOf(2, 5, 10).entries)).toBe(minutesToMs(15));
   });
 
   it('handles an empty queue', () => {
@@ -105,22 +110,23 @@ describe('deadlines', () => {
 
   it('derives absolute deadlines once started', () => {
     const running = startQueue(queueOf(2, 5), NOW);
-    expect(deadlineOf(running, 0, NOW)).toBe(NOW + minutesToMs(2));
-    expect(deadlineOf(running, 1, NOW)).toBe(NOW + minutesToMs(7));
+    // The first entry opens the queue; the second is five minutes after it.
+    expect(deadlineOf(running, 0, NOW)).toBe(NOW);
+    expect(deadlineOf(running, 1, NOW)).toBe(NOW + minutesToMs(5));
   });
 
   it('counts down in wall-clock time, not by ticks', () => {
-    const running = startQueue(queueOf(5), NOW);
-    expect(remainingMsOf(running, 0, NOW + minutesToMs(3))).toBe(
+    const running = startQueue(queueOf(0, 5), NOW);
+    expect(remainingMsOf(running, 1, NOW + minutesToMs(3))).toBe(
       minutesToMs(2)
     );
-    expect(remainingMsOf(running, 0, NOW + minutesToMs(99))).toBe(0);
+    expect(remainingMsOf(running, 1, NOW + minutesToMs(99))).toBe(0);
   });
 });
 
 describe('hold and resume', () => {
   it('banks elapsed time and stops the clock', () => {
-    const running = startQueue(queueOf(10), NOW);
+    const running = startQueue(queueOf(0, 10), NOW);
     const held = holdQueue(running, NOW + minutesToMs(4));
 
     expect(held.startedAt).toBeNull();
@@ -130,28 +136,42 @@ describe('hold and resume', () => {
   });
 
   it('resumes from where it was held', () => {
-    const held = holdQueue(startQueue(queueOf(10), NOW), NOW + minutesToMs(4));
+    const held = holdQueue(
+      startQueue(queueOf(0, 10), NOW),
+      NOW + minutesToMs(4)
+    );
     const resumedAt = NOW + minutesToMs(50);
     const resumed = startQueue(held, resumedAt);
 
-    expect(remainingMsOf(resumed, 0, resumedAt)).toBe(minutesToMs(6));
+    expect(remainingMsOf(resumed, 1, resumedAt)).toBe(minutesToMs(6));
   });
 });
 
 describe('advanceQueue', () => {
-  it('plays an entry that has just come due', () => {
-    const running = startQueue(queueOf(1), NOW);
-    const { fired } = advanceQueue(running, NOW + minutesToMs(1) + 200);
+  it('plays the opening entry as soon as the queue starts', () => {
+    const running = startQueue(queueOf(0, 1), NOW);
+    const { fired } = advanceQueue(running, NOW + 200);
 
     expect(fired?.label).toBe('s0');
   });
 
+  it('plays each following entry after its gap', () => {
+    const running = startQueue(queueOf(0, 1), NOW);
+    const opened = advanceQueue(running, NOW + 200);
+    const { fired } = advanceQueue(
+      opened.queue,
+      NOW + minutesToMs(1) + 200
+    );
+
+    expect(fired?.label).toBe('s1');
+  });
+
   it('plays only the most recent entry when several came due at once', () => {
     // Waking after a suspension must not fire a burst of overlapping sounds.
-    const running = startQueue(queueOf(1, 1, 1), NOW);
+    const running = startQueue(queueOf(0, 1, 1), NOW);
     const { fired, skipped } = advanceQueue(
       running,
-      NOW + minutesToMs(3) + 200
+      NOW + minutesToMs(2) + 200
     );
 
     expect(fired?.label).toBe('s2');
@@ -234,5 +254,90 @@ describe('formatting', () => {
 
   it('prefixes offsets with a plus', () => {
     expect(formatOffset(480_000)).toBe('+8:00');
+  });
+});
+
+
+describe('addEntryAtFront', () => {
+  it('places a newly picked sound at the front, firing at +0:00', () => {
+    const queue = addEntryAtFront(queueOf(5, 5), entry('new', 2));
+
+    expect(queue.entries[0]?.label).toBe('new');
+    expect(entryOffsets(queue.entries)[0]).toBe(0);
+  });
+
+  it('keeps the cursor pointing at the same upcoming entry', () => {
+    const running = startQueue(queueOf(1, 30), NOW);
+    const { queue } = advanceQueue(running, NOW + minutesToMs(1) + 200);
+    expect(queue.cursor).toBe(1);
+
+    expect(addEntryAtFront(queue, entry('new', 2)).cursor).toBe(2);
+  });
+});
+
+describe('moveEntry', () => {
+  it('re-spaces a moved entry against its new predecessor', () => {
+    // Matches the design: the candidate carries a 2-minute gap, so dropping it
+    // third puts it two minutes after the entry above it.
+    const queue = addEntryAtFront(queueOf(0, 8, 9.667), entry('cand', 2));
+    const moved = moveEntry(queue, 0, 2);
+
+    expect(moved.entries.map((e) => e.label)).toEqual([
+      's0',
+      's1',
+      'cand',
+      's2',
+    ]);
+
+    const offsets = entryOffsets(moved.entries);
+    expect(offsets[0]).toBe(0);
+    expect(offsets[1]).toBe(minutesToMs(8));
+    expect(offsets[2]).toBe(minutesToMs(10));
+  });
+
+  it('frees the previous first entry to use its own gap once displaced', () => {
+    const queue = queueOf(2, 8);
+    expect(entryOffsets(queue.entries)).toEqual([0, minutesToMs(8)]);
+
+    const swapped = moveEntry(queue, 0, 1);
+    expect(entryOffsets(swapped.entries)).toEqual([0, minutesToMs(2)]);
+  });
+
+  it('clamps an out-of-range target instead of dropping the entry', () => {
+    const queue = queueOf(1, 1, 1);
+    expect(moveEntry(queue, 0, 99).entries.map((e) => e.label)).toEqual([
+      's1',
+      's2',
+      's0',
+    ]);
+  });
+
+  it('is a no-op for an unchanged or invalid index', () => {
+    const queue = queueOf(1, 1);
+    expect(moveEntry(queue, 1, 1)).toBe(queue);
+    expect(moveEntry(queue, 5, 0)).toBe(queue);
+    expect(moveEntry(queue, -1, 0)).toBe(queue);
+  });
+
+  it('does not mutate the input queue', () => {
+    const queue = queueOf(1, 2, 3);
+    const snapshot = JSON.stringify(queue);
+    moveEntry(queue, 0, 2);
+    expect(JSON.stringify(queue)).toBe(snapshot);
+  });
+});
+
+describe('ordinal', () => {
+  it.each([
+    [0, '1st'],
+    [1, '2nd'],
+    [2, '3rd'],
+    [3, '4th'],
+    [10, '11th'],
+    [11, '12th'],
+    [12, '13th'],
+    [20, '21st'],
+  ])('index %i -> %s', (index, expected) => {
+    expect(ordinal(index)).toBe(expected);
   });
 });

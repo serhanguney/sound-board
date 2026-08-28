@@ -65,18 +65,6 @@ const config: Config = {
           DEFAULT: withAlpha('--sb-live'),
           soft: withAlpha('--sb-live-soft'),
         },
-        tag: {
-          drive: withAlpha('--sb-tag-drive'),
-          'drive-soft': withAlpha('--sb-tag-drive-soft'),
-          'low-motivation': withAlpha('--sb-tag-low-motivation'),
-          'low-motivation-soft': withAlpha('--sb-tag-low-motivation-soft'),
-          celebration: withAlpha('--sb-tag-celebration'),
-          'celebration-soft': withAlpha('--sb-tag-celebration-soft'),
-          chaos: withAlpha('--sb-tag-chaos'),
-          'chaos-soft': withAlpha('--sb-tag-chaos-soft'),
-          calm: withAlpha('--sb-tag-calm'),
-          'calm-soft': withAlpha('--sb-tag-calm-soft'),
-        },
       },
       borderRadius: {
         sm: 'var(--sb-radius-sm)',

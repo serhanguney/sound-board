@@ -1,9 +1,10 @@
 import {
-  addEntry,
+  addEntryAtFront,
   advanceQueue,
   clearQueue,
   EMPTY_QUEUE,
   holdQueue,
+  moveEntry,
   nextDeadline,
   removeEntry,
   startQueue,
@@ -109,8 +110,13 @@ export class QueueRunner {
     this.#update(() => queue);
   }
 
+  /** New entries land at the front, at +0:00, ready to be dragged into place. */
   add(entry: QueueEntry): void {
-    this.#update((queue) => addEntry(queue, entry));
+    this.#update((queue) => addEntryAtFront(queue, entry));
+  }
+
+  move(from: number, to: number): void {
+    this.#update((queue) => moveEntry(queue, from, to));
   }
 
   remove(id: QueueEntryId): void {

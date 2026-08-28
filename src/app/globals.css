@@ -32,14 +32,20 @@
 
     --sb-tag-drive: 330 80% 56%;
     --sb-tag-drive-soft: 331 78% 95%;
-    --sb-tag-low-motivation: 250 100% 69%;
-    --sb-tag-low-motivation-soft: 252 100% 96%;
+    --sb-tag-lame: 250 100% 69%;
+    --sb-tag-lame-soft: 252 100% 96%;
     --sb-tag-celebration: 45 93% 48%;
     --sb-tag-celebration-soft: 47 82% 91%;
     --sb-tag-chaos: 212 100% 59%;
     --sb-tag-chaos-soft: 214 100% 95%;
     --sb-tag-calm: 152 82% 39%;
     --sb-tag-calm-soft: 150 59% 93%;
+
+    --sb-tag-mundane: 220 9% 55%;
+    --sb-tag-mundane-soft: 220 14% 95%;
+
+    --sb-tag-fun: 291 64% 58%;
+    --sb-tag-fun-soft: 291 60% 95%;
 
     --sb-radius-sm: 10px;
     --sb-radius-md: 16px;

@@ -132,16 +132,15 @@ export function pickRandomSound(
 export function countByTag(
   sounds: readonly Sound[]
 ): Readonly<Record<SoundTagOrUntagged, number>> {
+  // Seeded from the tag list rather than a literal, so adding a tag does not
+  // silently leave a bucket missing here.
+  const empty = Object.fromEntries(
+    [...SOUND_TAGS, UNTAGGED].map((tag) => [tag, 0])
+  ) as Record<SoundTagOrUntagged, number>;
+
   return sounds.reduce<Record<SoundTagOrUntagged, number>>(
     (counts, sound) => ({ ...counts, [sound.tag]: counts[sound.tag] + 1 }),
-    {
-      drive: 0,
-      'low-motivation': 0,
-      celebration: 0,
-      chaos: 0,
-      calm: 0,
-      [UNTAGGED]: 0,
-    }
+    empty
   );
 }
 

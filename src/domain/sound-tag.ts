@@ -7,10 +7,12 @@ import { z } from 'zod';
  */
 export const SOUND_TAGS = [
   'drive',
-  'low-motivation',
+  'lame',
   'celebration',
   'chaos',
   'calm',
+  'mundane',
+  'fun'
 ] as const;
 
 export const soundTagSchema = z.enum(SOUND_TAGS);
@@ -31,10 +33,12 @@ export const TAG_SEPARATOR = '--';
 
 export const SOUND_TAG_LABELS: Readonly<Record<SoundTagOrUntagged, string>> = {
   drive: 'drive',
-  'low-motivation': 'low-motivation',
+  lame: 'lame',
+  mundane: 'mundane',
   celebration: 'celebration',
   chaos: 'chaos',
   calm: 'calm',
+  fun: 'fun',
   [UNTAGGED]: 'untagged',
 };
 

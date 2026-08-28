@@ -23,6 +23,15 @@ let stop: () => void;
 let fired: string[];
 let skipped: string[];
 
+/**
+ * Adds entries so the queue ends up in the order written. `add` inserts at the
+ * front — a newly picked sound opens the queue — so the input is reversed here
+ * to keep the tests reading in play order.
+ */
+const enqueue = (...items: readonly (readonly [string, number])[]) => {
+  for (const [label, gap] of [...items].reverse()) runner.add(entry(label, gap));
+};
+
 beforeEach(() => {
   vi.useFakeTimers();
   vi.setSystemTime(START);
@@ -30,7 +39,9 @@ beforeEach(() => {
   fired = [];
   skipped = [];
   runner.fired.on(({ entry: e }) => fired.push(e.label));
-  runner.skipped.on(({ entries }) => skipped.push(...entries.map((e) => e.label)));
+  runner.skipped.on(({ entries }) =>
+    skipped.push(...entries.map((e) => e.label))
+  );
   stop = runner.start();
 });
 
@@ -49,8 +60,7 @@ const queue = () => runner.state.getSnapshot().queue;
 
 describe('QueueRunner', () => {
   it('never fires until play() is called', () => {
-    runner.add(entry('a', 1));
-    runner.add(entry('b', 1));
+    enqueue(['a', 0], ['b', 1]);
 
     vi.advanceTimersByTime(minutesToMs(120));
 
@@ -58,12 +68,11 @@ describe('QueueRunner', () => {
     expect(queueStatus(queue())).toBe('idle');
   });
 
-  it('fires entries in order once played', () => {
-    runner.add(entry('a', 1));
-    runner.add(entry('b', 2));
+  it('opens with the first entry and spaces the rest after it', () => {
+    enqueue(['a', 0], ['b', 2]);
     runner.play();
 
-    vi.advanceTimersByTime(minutesToMs(1));
+    vi.advanceTimersByTime(1_000);
     expect(fired).toEqual(['a']);
 
     vi.advanceTimersByTime(minutesToMs(2));
@@ -71,29 +80,33 @@ describe('QueueRunner', () => {
   });
 
   it('anchors gaps to the moment play was pressed, not to when entries were added', () => {
-    runner.add(entry('a', 5));
-    // Ten minutes of preparation time before the meeting starts.
+    enqueue(['a', 0], ['b', 5]);
+    // Ten minutes of preparation before the meeting starts.
     vi.advanceTimersByTime(minutesToMs(10));
     expect(fired).toEqual([]);
 
     runner.play();
-    vi.advanceTimersByTime(minutesToMs(5));
+    vi.advanceTimersByTime(1_000);
     expect(fired).toEqual(['a']);
+
+    vi.advanceTimersByTime(minutesToMs(5));
+    expect(fired).toEqual(['a', 'b']);
   });
 
-  it('fires entries whose deadline passed while the tab was suspended', () => {
-    runner.add(entry('a', 5));
+  it('fires an entry whose deadline passed moments before the tab woke', () => {
+    enqueue(['a', 0], ['b', 5]);
     runner.play();
+    vi.advanceTimersByTime(1_000);
 
     suspendThenResume(minutesToMs(5));
 
-    expect(fired).toEqual(['a']);
+    expect(fired).toEqual(['a', 'b']);
   });
 
   it('plays nothing and reports every entry as skipped after a long suspension', () => {
-    // The bug this covers: waking up fired all three at once, each cutting off
-    // the last, so one apparently random sound played.
-    for (const label of ['a', 'b', 'c']) runner.add(entry(label, 1));
+    // The bug this covers: waking up fired all of them at once, each cutting
+    // off the last, so one apparently random sound played.
+    enqueue(['a', 0], ['b', 1], ['c', 1]);
     runner.play();
 
     suspendThenResume(minutesToMs(60));
@@ -103,7 +116,7 @@ describe('QueueRunner', () => {
   });
 
   it('does not report the same entry twice', () => {
-    for (const label of ['a', 'b']) runner.add(entry(label, 1));
+    enqueue(['a', 0], ['b', 1]);
     runner.play();
 
     suspendThenResume(minutesToMs(60));
@@ -113,45 +126,37 @@ describe('QueueRunner', () => {
   });
 
   it('plays only the latest entry when a few came due during one suspension', () => {
-    for (const label of ['a', 'b']) runner.add(entry(label, 1));
+    enqueue(['a', 0], ['b', 1]);
     runner.play();
 
-    // No ticks run for two minutes; on waking, 'a' is long past but 'b' has
-    // only just come due, so 'b' is the one still worth playing.
-    suspendThenResume(minutesToMs(2) + 1_000);
+    // No ticks for a minute; on waking 'a' is long past but 'b' has only just
+    // come due, so 'b' is the one still worth playing.
+    suspendThenResume(minutesToMs(1) + 1_000);
 
     expect(fired).toEqual(['b']);
     expect(skipped).toEqual(['a']);
   });
 
-  it('still fires each entry on time when ticks run normally', () => {
-    for (const label of ['a', 'b']) runner.add(entry(label, 1));
-    runner.play();
-
-    vi.advanceTimersByTime(minutesToMs(2));
-
-    expect(fired).toEqual(['a', 'b']);
-    expect(skipped).toEqual([]);
-  });
-
   it('stops firing while held and resumes where it left off', () => {
-    runner.add(entry('a', 10));
+    enqueue(['a', 0], ['b', 10]);
     runner.play();
+    vi.advanceTimersByTime(1_000);
+    expect(fired).toEqual(['a']);
 
     vi.advanceTimersByTime(minutesToMs(4));
     runner.hold();
     expect(queueStatus(queue())).toBe('held');
 
     vi.advanceTimersByTime(minutesToMs(60));
-    expect(fired).toEqual([]);
+    expect(fired).toEqual(['a']);
 
     runner.play();
     vi.advanceTimersByTime(minutesToMs(6));
-    expect(fired).toEqual(['a']);
+    expect(fired).toEqual(['a', 'b']);
   });
 
   it('clears everything back to empty', () => {
-    runner.add(entry('a', 1));
+    enqueue(['a', 1]);
     runner.play();
     runner.clear();
 
@@ -161,8 +166,7 @@ describe('QueueRunner', () => {
   });
 
   it('removing a pending entry prevents it firing', () => {
-    runner.add(entry('a', 1));
-    runner.add(entry('b', 1));
+    enqueue(['a', 0], ['b', 1]);
     const second = queue().entries[1]!;
     runner.remove(second.id);
     runner.play();
@@ -175,15 +179,15 @@ describe('QueueRunner', () => {
     const cursors: number[] = [];
     runner.fired.on(() => cursors.push(runner.state.getSnapshot().queue.cursor));
 
-    runner.add(entry('a', 1));
+    enqueue(['a', 0]);
     runner.play();
-    vi.advanceTimersByTime(minutesToMs(1));
+    vi.advanceTimersByTime(1_000);
 
     expect(cursors).toEqual([1]);
   });
 
   it('stops all timers when the clock is stopped', () => {
-    runner.add(entry('a', 1));
+    enqueue(['a', 0]);
     runner.play();
     runner.stopClock();
 
@@ -192,12 +196,44 @@ describe('QueueRunner', () => {
   });
 
   it('keeps the same state reference when only sub-second time passes', () => {
-    runner.add(entry('a', 5));
+    enqueue(['a', 0], ['b', 5]);
     runner.play();
-    const before = runner.state.getSnapshot();
+    vi.advanceTimersByTime(1_000);
 
+    const before = runner.state.getSnapshot();
     vi.advanceTimersByTime(400);
+
     // Avoids re-rendering the board twice a second for no visible change.
     expect(runner.state.getSnapshot()).toBe(before);
+  });
+});
+
+describe('QueueRunner reordering', () => {
+  it('adds new entries at the front so they open the queue', () => {
+    runner.add(entry('first', 5));
+    runner.add(entry('second', 5));
+
+    expect(queue().entries.map((e) => e.label)).toEqual(['second', 'first']);
+  });
+
+  it('moves an entry to a new position', () => {
+    enqueue(['a', 2], ['b', 2], ['c', 2]);
+
+    runner.move(0, 2);
+    expect(queue().entries.map((e) => e.label)).toEqual(['b', 'c', 'a']);
+  });
+
+  it('fires reordered entries in their new order, re-spaced', () => {
+    // 'a' opens the queue at +0:00, so its own 2-minute gap is unused. Moving
+    // it below 'b' brings that gap into play.
+    enqueue(['a', 2], ['b', 1]);
+    runner.move(0, 1);
+    runner.play();
+
+    vi.advanceTimersByTime(1_000);
+    expect(fired).toEqual(['b']);
+
+    vi.advanceTimersByTime(minutesToMs(2));
+    expect(fired).toEqual(['b', 'a']);
   });
 });

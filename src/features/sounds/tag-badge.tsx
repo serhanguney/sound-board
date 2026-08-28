@@ -2,18 +2,17 @@ import type { SoundTagOrUntagged } from '@/domain/sound-tag';
 import { cn } from '@/lib/utils';
 
 /**
- * Tag colours are theme tokens, not literals. Tailwind needs the full class
- * name at build time, so each tag maps to a fixed class rather than an
- * interpolated one.
+ * Tag colours resolve through a CSS custom property named after the tag, so
+ * adding a tag to `SOUND_TAGS` needs no change here — only an optional
+ * `--sb-tag-<name>` token in `globals.css`. A tag with no token falls back to
+ * the neutral ink colour rather than rendering an invisible dot.
+ *
+ * This is deliberately not a Tailwind class map: Tailwind only emits classes it
+ * can see literally at build time, which would make every new tag a four-file
+ * edit and a silently colourless dot when one was missed.
  */
-const DOT_CLASS: Readonly<Record<SoundTagOrUntagged, string>> = {
-  drive: 'bg-tag-drive',
-  'low-motivation': 'bg-tag-low-motivation',
-  celebration: 'bg-tag-celebration',
-  chaos: 'bg-tag-chaos',
-  calm: 'bg-tag-calm',
-  untagged: 'bg-ink-subtle',
-};
+const tagColor = (tag: SoundTagOrUntagged): string =>
+  `hsl(var(--sb-tag-${tag}, var(--sb-ink-3)))`;
 
 export function TagDot({
   tag,
@@ -24,17 +23,14 @@ export function TagDot({
 }) {
   return (
     <span
-      className={cn(
-        'inline-block h-1.5 w-1.5 shrink-0 rounded-full',
-        DOT_CLASS[tag],
-        className
-      )}
+      className={cn('inline-block h-1.5 w-1.5 shrink-0 rounded-full', className)}
+      style={{ backgroundColor: tagColor(tag) }}
       aria-hidden
     />
   );
 }
 
-/** Pill used by the filter row and the queue modal's source card. */
+/** Pill used by the filter rows and the queue dialog. */
 export function TagChip({
   tag,
   selected = false,
@@ -61,12 +57,15 @@ export function TagChip({
     className
   );
 
-  if (!onClick) {
-    return <span className={classes}>{content}</span>;
-  }
+  if (!onClick) return <span className={classes}>{content}</span>;
 
   return (
-    <button type="button" onClick={onClick} aria-pressed={selected} className={classes}>
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={selected}
+      className={classes}
+    >
       {content}
     </button>
   );

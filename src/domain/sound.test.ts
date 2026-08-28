@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { toSoundId } from './ids';
+import { SOUND_TAGS, UNTAGGED } from './sound-tag';
 import {
   countByTag,
   filterByTag,
@@ -18,7 +19,7 @@ describe('parseSoundPath', () => {
     ['sounds/shotgun--drive.mp3', 'Shotgun', 'drive'],
     ['sounds/air-horn--chaos.mp3', 'Air Horn', 'chaos'],
     ['sounds/pour-coffee--calm.wav', 'Pour Coffee', 'calm'],
-    ['sounds/sad-trombone--low-motivation.mp3', 'Sad Trombone', 'low-motivation'],
+    ['sounds/sad-trombone--lame.mp3', 'Sad Trombone', 'lame'],
   ])('%s -> %s / %s', (pathname, name, tag) => {
     expect(parseSoundPath(pathname)).toEqual({ displayName: name, tag });
   });
@@ -88,7 +89,7 @@ const sounds: readonly Sound[] = [
   make('Air Horn', 'chaos'),
   make('Applause', 'celebration'),
   make('Drum Roll', 'drive'),
-  make('Crickets', 'low-motivation'),
+  make('Crickets', 'lame'),
 ];
 
 describe('findSound', () => {
@@ -167,15 +168,22 @@ describe('pickRandomSound', () => {
 });
 
 describe('countByTag', () => {
-  it('counts every tag, including zeroes', () => {
-    expect(countByTag(sounds)).toEqual({
-      drive: 1,
-      'low-motivation': 1,
-      celebration: 1,
-      chaos: 1,
-      calm: 0,
-      untagged: 0,
-    });
+  it('counts the tags in use', () => {
+    const counts = countByTag(sounds);
+
+    expect(counts.drive).toBe(1);
+    expect(counts.celebration).toBe(1);
+    expect(counts.chaos).toBe(1);
+    expect(counts.lame).toBe(1);
+  });
+
+  it('returns a zero for every known tag, not just the ones present', () => {
+    // Derived from the tag list so adding a tag does not break this test.
+    const counts = countByTag([]);
+
+    for (const tag of [...SOUND_TAGS, UNTAGGED]) {
+      expect(counts[tag]).toBe(0);
+    }
   });
 });
 
@@ -197,7 +205,7 @@ describe('tagsInUse', () => {
   it('lists only tags present in the library, in canonical order', () => {
     expect(tagsInUse(sounds)).toEqual([
       'drive',
-      'low-motivation',
+      'lame',
       'celebration',
       'chaos',
     ]);
