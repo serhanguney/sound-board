@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ListPlus, Minus, Plus, Shuffle } from 'lucide-react';
 import {
   Dialog,
@@ -19,7 +19,7 @@ import {
   type Queue,
   type QueueEntry,
 } from '@/domain/queue';
-import type { Sound } from '@/domain/sound';
+import { countByTag, type Sound } from '@/domain/sound';
 import { SOUND_TAGS, type SoundTag } from '@/domain/sound-tag';
 import { TagChip } from '@/features/sounds/tag-badge';
 import { cn } from '@/lib/utils';
@@ -59,6 +59,11 @@ export function AddToQueueDialog({
   const [tag, setTag] = useState<SoundTag | null>(null);
   const [gapMinutes, setGapMinutes] = useState(2);
   const [candidateId, setCandidateId] = useState<QueueEntryId | null>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
+
+  // A random pick from a tag nothing carries resolves to no sound at all, so
+  // the entry would sit in the queue and fire silence.
+  const counts = useMemo(() => countByTag(sounds), [sounds]);
   const [recentIds, setRecentIds] = useState<readonly SoundId[]>([]);
 
   const add = useCallback(
@@ -90,6 +95,9 @@ export function AddToQueueDialog({
     setTag(null);
     setGapMinutes(2);
     setCandidateId(null);
+    // Closed on open: the dialog's first job is to show where the sound
+    // landed, and an overlay covering the queue would defeat that.
+    setPickerOpen(false);
   }, [open, presetSound]);
 
   // A card's queue button opens the dialog with that sound already added, so
@@ -109,7 +117,17 @@ export function AddToQueueDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[90vh] max-w-xl flex-col gap-0 border-line bg-surface p-0">
+      <DialogContent
+        className="flex max-h-[90vh] max-w-xl flex-col gap-0 border-line bg-surface p-0"
+        onEscapeKeyDown={(event) => {
+          // Radix claims escape on the document in the capture phase, so the
+          // combobox cannot dismiss itself. Escape belongs to the innermost
+          // thing on screen, which is the picker's overlay while it is open.
+          if (!pickerOpen) return;
+          event.preventDefault();
+          setPickerOpen(false);
+        }}
+      >
         <DialogHeader className="shrink-0 space-y-1 p-6 pb-4 text-left">
           <DialogTitle className="font-display text-xl font-semibold text-ink">
             Create a queue
@@ -120,7 +138,15 @@ export function AddToQueueDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-6 pb-2">
+        {/*
+          * Only the queue scrolls. The picker's dropdown overlays the dialog,
+          * and a scroll container above it would clip the overlay to its own
+          * box. The queue's flex basis is the floor that guarantees there is
+          * something for the dropdown to cover even when the queue is empty,
+          * and unlike a min-height it still shrinks when the dialog hits its
+          * own height cap.
+          */}
+        <div className="shrink-0 space-y-5 px-6 pb-4">
           <fieldset className="space-y-2">
             <legend className="text-[10px] font-bold uppercase tracking-[0.08em] text-ink-subtle">
               What to add
@@ -136,7 +162,10 @@ export function AddToQueueDialog({
                 <button
                   key={value}
                   type="button"
-                  onClick={() => setMode(value)}
+                  onClick={() => {
+                    setMode(value);
+                    setPickerOpen(false);
+                  }}
                   aria-pressed={mode === value}
                   className={cn(
                     'rounded-sm px-3 py-2 text-[13px] font-medium transition-colors',
@@ -155,6 +184,8 @@ export function AddToQueueDialog({
                 sounds={sounds}
                 durations={durations}
                 recentIds={recentIds}
+                open={pickerOpen}
+                onOpenChange={setPickerOpen}
                 onPick={pickSound}
                 onPreview={onPreview}
               />
@@ -166,6 +197,7 @@ export function AddToQueueDialog({
                       key={value}
                       tag={value}
                       selected={tag === value}
+                      disabled={counts[value] === 0}
                       onClick={() => setTag(tag === value ? null : value)}
                     />
                   ))}
@@ -236,18 +268,20 @@ export function AddToQueueDialog({
               ))}
             </div>
           </fieldset>
+        </div>
 
-          <section className="space-y-2">
-            <div className="flex items-center justify-between">
-              <h3 className="text-[10px] font-bold uppercase tracking-[0.08em] text-ink-subtle">
-                In this queue
-              </h3>
-              <span className="text-xs text-ink-subtle">
-                {queue.entries.length}
-                {queue.entries.length > 1 && ' · drag to reorder'}
-              </span>
-            </div>
+        <section className="flex shrink grow basis-48 flex-col gap-2 px-6 pb-2">
+          <div className="flex shrink-0 items-center justify-between">
+            <h3 className="text-[10px] font-bold uppercase tracking-[0.08em] text-ink-subtle">
+              In this queue
+            </h3>
+            <span className="text-xs text-ink-subtle">
+              {queue.entries.length}
+              {queue.entries.length > 1 && ' · drag to reorder'}
+            </span>
+          </div>
 
+          <div className="min-h-0 flex-1 overflow-y-auto">
             {queue.entries.length === 0 ? (
               <p className="rounded-sm bg-background px-3 py-4 text-center text-[13px] text-ink-subtle">
                 Nothing queued yet.
@@ -261,8 +295,8 @@ export function AddToQueueDialog({
                 onRemove={onRemove}
               />
             )}
-          </section>
-        </div>
+          </div>
+        </section>
 
         <footer className="mt-auto flex shrink-0 justify-end border-t border-line px-6 py-4">
           <button
