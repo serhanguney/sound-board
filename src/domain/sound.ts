@@ -81,19 +81,33 @@ export function filterByTag(
   return tag === null ? sounds : sounds.filter((sound) => sound.tag === tag);
 }
 
+export interface TagOption {
+  readonly tag: SoundTagOrUntagged;
+  /** How many sounds in the library carry it. */
+  readonly count: number;
+}
+
 /**
- * Tags actually present in the library, in canonical order.
+ * Every tag a chip row can offer, with its count, in canonical order.
  *
- * The filter row is built from this rather than from the full tag list, so a
- * library with no `calm` sounds does not offer a chip that matches nothing.
+ * Built from the full tag list rather than from the tags actually in use, so a
+ * tag added to `SOUND_TAGS` appears everywhere the moment it is added instead
+ * of staying invisible until the first sound is uploaded with it. The count is
+ * what lets a row dim the ones that would filter the view down to nothing —
+ * the chip is there to be seen, not yet to be used.
+ *
+ * `untagged` is not a tag anyone can assign, so it earns a chip only once
+ * something in the library is actually missing one.
  */
-export function tagsInUse(
-  sounds: readonly Sound[]
-): readonly SoundTagOrUntagged[] {
+export function tagOptions(sounds: readonly Sound[]): readonly TagOption[] {
   const counts = countByTag(sounds);
-  return ([...SOUND_TAGS, UNTAGGED] as const).filter(
-    (tag) => counts[tag] > 0
-  );
+
+  return [
+    ...SOUND_TAGS.map((tag) => ({ tag, count: counts[tag] })),
+    ...(counts[UNTAGGED] > 0
+      ? [{ tag: UNTAGGED, count: counts[UNTAGGED] }]
+      : []),
+  ];
 }
 
 /** Case-insensitive match against the display name and the tag. */

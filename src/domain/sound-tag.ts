@@ -12,7 +12,8 @@ export const SOUND_TAGS = [
   'chaos',
   'calm',
   'mundane',
-  'fun'
+  'fun',
+  'cats'
 ] as const;
 
 export const soundTagSchema = z.enum(SOUND_TAGS);
@@ -39,6 +40,7 @@ export const SOUND_TAG_LABELS: Readonly<Record<SoundTagOrUntagged, string>> = {
   chaos: 'chaos',
   calm: 'calm',
   fun: 'fun',
+  cats: 'cats',
   [UNTAGGED]: 'untagged',
 };
 

@@ -2,7 +2,7 @@
 
 import type { SoundId } from '@/domain/ids';
 import type { Sound } from '@/domain/sound';
-import { tagsInUse } from '@/domain/sound';
+import { tagOptions } from '@/domain/sound';
 import type { SoundTagOrUntagged } from '@/domain/sound-tag';
 import { SoundCard } from '@/features/sounds/sound-card';
 import { TagChip } from '@/features/sounds/tag-badge';
@@ -58,11 +58,12 @@ export function SoundGrid({
           >
             All
           </button>
-          {tagsInUse(sounds).map((tag) => (
+          {tagOptions(sounds).map(({ tag, count }) => (
             <TagChip
               key={tag}
               tag={tag}
               selected={activeTag === tag}
+              disabled={count === 0}
               onClick={() => onTagChange(activeTag === tag ? null : tag)}
             />
           ))}

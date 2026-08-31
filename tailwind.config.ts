@@ -77,6 +77,9 @@ const config: Config = {
       },
       boxShadow: {
         panel: '0 1px 3px 0 hsl(var(--sb-ink) / 0.05)',
+        // Lifts an overlay clear of the surface it covers. `panel` is a
+        // resting elevation and is too faint to separate the two.
+        pop: '0 8px 24px -4px hsl(var(--sb-ink) / 0.16), 0 2px 6px -2px hsl(var(--sb-ink) / 0.08)',
       },
     },
   },

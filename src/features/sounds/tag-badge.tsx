@@ -34,11 +34,18 @@ export function TagDot({
 export function TagChip({
   tag,
   selected = false,
+  disabled = false,
   onClick,
   className,
 }: {
   tag: SoundTagOrUntagged;
   selected?: boolean;
+  /**
+   * The tag exists but nothing carries it yet. Shown rather than hidden, so a
+   * newly added tag is visible everywhere immediately; dimmed rather than
+   * live, because acting on it could only ever empty the view.
+   */
+  disabled?: boolean;
   onClick?: () => void;
   className?: string;
 }) {
@@ -51,9 +58,11 @@ export function TagChip({
 
   const classes = cn(
     'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1.5 text-xs font-medium transition-colors',
-    selected
-      ? 'border-ink bg-ink text-surface'
-      : 'border-line bg-surface text-ink-muted hover:border-line-strong',
+    disabled
+      ? 'cursor-not-allowed border-line bg-surface text-ink-subtle opacity-50'
+      : selected
+        ? 'border-ink bg-ink text-surface'
+        : 'border-line bg-surface text-ink-muted hover:border-line-strong',
     className
   );
 
@@ -63,7 +72,9 @@ export function TagChip({
     <button
       type="button"
       onClick={onClick}
+      disabled={disabled}
       aria-pressed={selected}
+      title={disabled ? `No sounds tagged ${tag} yet` : undefined}
       className={classes}
     >
       {content}

@@ -10,7 +10,7 @@ import {
   pickRandomSound,
   searchSounds,
   soundFromBlob,
-  tagsInUse,
+  tagOptions,
   type Sound,
 } from './sound';
 
@@ -201,23 +201,44 @@ describe('formatDuration', () => {
   });
 });
 
-describe('tagsInUse', () => {
-  it('lists only tags present in the library, in canonical order', () => {
-    expect(tagsInUse(sounds)).toEqual([
-      'drive',
-      'lame',
-      'celebration',
-      'chaos',
+describe('tagOptions', () => {
+  it('lists every tag in canonical order, whatever the library holds', () => {
+    expect(tagOptions(sounds).map((option) => option.tag)).toEqual([
+      ...SOUND_TAGS,
     ]);
   });
 
-  it('includes the untagged bucket when the library has untagged sounds', () => {
-    // Every sound is untagged until its file is renamed with a --tag suffix.
-    expect(tagsInUse([make('Yawn', 'untagged')])).toEqual(['untagged']);
+  it('offers a tag no sound carries yet, with a count of zero', () => {
+    // A tag added to SOUND_TAGS has to be visible before anything is uploaded
+    // with it, or there is no way to discover it exists.
+    const added = tagOptions([make('Shotgun', 'drive')]);
+
+    expect(added.find((option) => option.tag === 'calm')).toEqual({
+      tag: 'calm',
+      count: 0,
+    });
+    expect(added.find((option) => option.tag === 'drive')).toEqual({
+      tag: 'drive',
+      count: 1,
+    });
   });
 
-  it('is empty for an empty library', () => {
-    expect(tagsInUse([])).toEqual([]);
+  it('appends the untagged bucket only when something is untagged', () => {
+    // Every sound is untagged until its file is renamed with a --tag suffix,
+    // but nobody can choose it, so it is not offered otherwise.
+    expect(tagOptions(sounds).map((option) => option.tag)).not.toContain(
+      UNTAGGED
+    );
+    expect(tagOptions([make('Yawn', 'untagged')]).at(-1)).toEqual({
+      tag: UNTAGGED,
+      count: 1,
+    });
+  });
+
+  it('still lists every tag for an empty library', () => {
+    expect(tagOptions([])).toEqual(
+      SOUND_TAGS.map((tag) => ({ tag, count: 0 }))
+    );
   });
 });
 
