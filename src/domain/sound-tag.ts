@@ -10,7 +10,6 @@ export const SOUND_TAGS = [
   'lame',
   'celebration',
   'chaos',
-  'calm',
   'mundane',
   'fun',
   'cats'
@@ -38,7 +37,6 @@ export const SOUND_TAG_LABELS: Readonly<Record<SoundTagOrUntagged, string>> = {
   mundane: 'mundane',
   celebration: 'celebration',
   chaos: 'chaos',
-  calm: 'calm',
   fun: 'fun',
   cats: 'cats',
   [UNTAGGED]: 'untagged',

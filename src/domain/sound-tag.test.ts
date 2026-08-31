@@ -18,7 +18,7 @@ describe('splitTagSuffix', () => {
   });
 
   it('uses the final separator so a name may contain one', () => {
-    expect(splitTagSuffix('a--b--calm')).toEqual({ name: 'a--b', tag: 'calm' });
+    expect(splitTagSuffix('a--b--cats')).toEqual({ name: 'a--b', tag: 'cats' });
   });
 
   it('leaves the name intact when the suffix is not a known tag', () => {

@@ -38,25 +38,21 @@
     --sb-tag-celebration-soft: 47 82% 91%;
     --sb-tag-chaos: 212 100% 59%;
     --sb-tag-chaos-soft: 214 100% 95%;
-    --sb-tag-calm: 152 82% 39%;
-    --sb-tag-calm-soft: 150 59% 93%;
 
     /*
-     * Tags added after the original five. The five above come from the design
-     * and already occupy hues 45 / 152 / 212 / 250 / 330, so a new tag has to
-     * either claim the remaining gap around 290 or separate itself by
-     * saturation instead of hue.
+     * Tags added after the original set. The ones above come from the design
+     * and occupy hues 45 / 212 / 250 / 330, so a new tag has to either claim a
+     * remaining gap or separate itself by saturation instead of hue.
      *
-     * `fun` takes that gap but sits deeper and less saturated than `lame`
-     * (250 100% 69%), which is its nearest neighbour — at dot size, hue alone
-     * would not tell them apart.
+     * `fun` takes the gap around 290 but sits deeper and less saturated than
+     * `lame` (250 100% 69%), which is its nearest neighbour — at dot size, hue
+     * alone would not tell them apart.
      *
      * `mundane` is the only desaturated tag, which is both what it means and
      * what makes it unmistakable.
      *
-     * `cats` takes the last wide gap left on the wheel — the 107 degrees
-     * between `celebration` (45) and `calm` (152). Sitting near its midpoint
-     * puts it ~50 degrees from either, the largest separation still available.
+     * `cats` was placed midway between `celebration` (45) and the since-removed
+     * `calm` (152), the widest gap left on the wheel at the time.
      */
     --sb-tag-fun: 291 72% 47%;
     --sb-tag-fun-soft: 291 62% 95%;

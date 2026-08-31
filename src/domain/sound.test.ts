@@ -18,7 +18,7 @@ describe('parseSoundPath', () => {
   it.each([
     ['sounds/shotgun--drive.mp3', 'Shotgun', 'drive'],
     ['sounds/air-horn--chaos.mp3', 'Air Horn', 'chaos'],
-    ['sounds/pour-coffee--calm.wav', 'Pour Coffee', 'calm'],
+    ['sounds/pour-coffee--mundane.wav', 'Pour Coffee', 'mundane'],
     ['sounds/sad-trombone--lame.mp3', 'Sad Trombone', 'lame'],
   ])('%s -> %s / %s', (pathname, name, tag) => {
     expect(parseSoundPath(pathname)).toEqual({ displayName: name, tag });
@@ -40,9 +40,9 @@ describe('parseSoundPath', () => {
   });
 
   it('uses the final separator so names may contain one', () => {
-    expect(parseSoundPath('sounds/a--b--calm.mp3')).toEqual({
+    expect(parseSoundPath('sounds/a--b--mundane.mp3')).toEqual({
       displayName: 'A B',
-      tag: 'calm',
+      tag: 'mundane',
     });
   });
 
@@ -72,7 +72,7 @@ describe('soundFromBlob', () => {
 
   it('rejects an unusable url instead of throwing', () => {
     expect(
-      soundFromBlob({ pathname: 'sounds/bell--calm.mp3', url: 'not-a-url' })
+      soundFromBlob({ pathname: 'sounds/bell--fun.mp3', url: 'not-a-url' })
     ).toBeNull();
   });
 });
@@ -159,7 +159,7 @@ describe('pickRandomSound', () => {
   });
 
   it('returns undefined when no sound matches the tag', () => {
-    expect(pickRandomSound(sounds, { tag: 'calm' })).toBeUndefined();
+    expect(pickRandomSound(sounds, { tag: 'mundane' })).toBeUndefined();
   });
 
   it('returns undefined for an empty library', () => {
@@ -213,8 +213,8 @@ describe('tagOptions', () => {
     // with it, or there is no way to discover it exists.
     const added = tagOptions([make('Shotgun', 'drive')]);
 
-    expect(added.find((option) => option.tag === 'calm')).toEqual({
-      tag: 'calm',
+    expect(added.find((option) => option.tag === 'cats')).toEqual({
+      tag: 'cats',
       count: 0,
     });
     expect(added.find((option) => option.tag === 'drive')).toEqual({
