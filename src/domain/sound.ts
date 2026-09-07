@@ -60,7 +60,7 @@ export function soundFromBlob(blob: {
     id: blob.pathname,
     displayName,
     url: blob.url,
-    iconKey: inferSoundIconKey(displayName),
+    iconKey: inferSoundIconKey(displayName, tag),
     tag,
   });
 

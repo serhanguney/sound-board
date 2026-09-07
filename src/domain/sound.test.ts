@@ -65,7 +65,7 @@ describe('soundFromBlob', () => {
       id: 'sounds/applause--celebration.mp3',
       displayName: 'Applause',
       url: 'https://blob.example.com/sounds/applause--celebration.mp3',
-      iconKey: 'applause',
+      iconKey: 'party-popper',
       tag: 'celebration',
     });
   });

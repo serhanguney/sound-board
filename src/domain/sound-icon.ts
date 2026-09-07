@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { UNTAGGED, type SoundTagOrUntagged } from './sound-tag';
 
 /**
  * Icons are identified by a serializable key, never by a React element, so a
@@ -9,17 +10,22 @@ import { z } from 'zod';
  */
 export const SOUND_ICON_KEYS = [
   'alarm',
-  'applause',
+  'balloon',
   'bell',
   'boo',
   'bug',
+  'chess-pawn',
+  'circle-dot-dashed',
   'coffee',
   'drum',
   'gunshot',
+  'human-voice',
   'laugh',
   'megaphone',
   'monitor',
   'music',
+  'party-popper',
+  'paw-print',
   'plane',
   'sad',
   'shuffle',
@@ -28,7 +34,6 @@ export const SOUND_ICON_KEYS = [
   'trophy',
   'wrong',
   'zap',
-  'human-voice'
 ] as const;
 
 export const soundIconKeySchema = z.enum(SOUND_ICON_KEYS);
@@ -50,7 +55,7 @@ const ICON_KEYWORDS: ReadonlyArray<readonly [SoundIconKey, readonly string[]]> =
   [
     ['alarm', ['nervousclock', 'alarm']],
     ['timer', ['countdown', 'timer', 'clock', 'tick']],
-    ['applause', ['applause', 'clap', 'cheer']],
+    ['party-popper', ['applause', 'clap', 'cheer']],
     ['trophy', ['tada', 'success', 'victory', 'congrat', 'trophy']],
     ['sparkles', ['sparkle', 'magic', 'shine']],
     ['drum', ['drum']],
@@ -60,7 +65,10 @@ const ICON_KEYWORDS: ReadonlyArray<readonly [SoundIconKey, readonly string[]]> =
     ['sad', ['sadtrombone', 'trombone', 'lowmotivation', 'womp', 'sad']],
     ['wrong', ['wrong', 'incorrect', 'error', 'fail']],
     ['boo', ['boo', 'negative']],
-    ['bug', ['cricket', 'bug']],
+    ['bug', ['cricket', 'bug', 'mosquito']],
+    // `cat` is not here: it is a substring of ordinary words like
+    // "communicate". Cat sounds are reached by their `cats` tag instead.
+    ['paw-print', ['meow', 'purr', 'kitten']],
     ['megaphone', ['airhorn', 'horn', 'megaphone', 'announce']],
     ['coffee', ['coffee', 'tea', 'brew']],
     ['monitor', ['windows', 'startup', 'computer', 'desktop']],
@@ -73,13 +81,35 @@ const ICON_KEYWORDS: ReadonlyArray<readonly [SoundIconKey, readonly string[]]> =
 const collapse = (value: string): string =>
   value.toLowerCase().replace(/[^a-z0-9]/g, '');
 
-/** Derives an icon key from a display name. Pure and total. */
-export function inferSoundIconKey(displayName: string): SoundIconKey {
+/**
+ * What a tag falls back to when nothing in the name is more specific.
+ *
+ * A tag says what a sound is *for*, which is a weaker signal than what it is
+ * called — "Airplane Captain" is tagged chaos but is still a plane. So these
+ * apply only once every keyword has missed. A tag with no entry here, and an
+ * untagged sound, fall through to `DEFAULT_SOUND_ICON`.
+ */
+const ICON_BY_TAG: Partial<
+  Readonly<Record<SoundTagOrUntagged, SoundIconKey>>
+> = {
+  fun: 'balloon',
+  celebration: 'party-popper',
+  chaos: 'zap',
+  lame: 'circle-dot-dashed',
+  mundane: 'chess-pawn',
+  cats: 'paw-print',
+};
+
+/** Derives an icon key from a display name and tag. Pure and total. */
+export function inferSoundIconKey(
+  displayName: string,
+  tag: SoundTagOrUntagged = UNTAGGED
+): SoundIconKey {
   const haystack = collapse(displayName);
 
-  return (
-    ICON_KEYWORDS.find(([, keywords]) =>
-      keywords.some((keyword) => haystack.includes(keyword))
-    )?.[0] ?? DEFAULT_SOUND_ICON
-  );
+  const named = ICON_KEYWORDS.find(([, keywords]) =>
+    keywords.some((keyword) => haystack.includes(keyword))
+  )?.[0];
+
+  return named ?? ICON_BY_TAG[tag] ?? DEFAULT_SOUND_ICON;
 }

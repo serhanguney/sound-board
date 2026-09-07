@@ -1,16 +1,19 @@
 import { describe, expect, it } from 'vitest';
 import { inferSoundIconKey, SOUND_ICON_KEYS } from './sound-icon';
+import { SOUND_TAGS, UNTAGGED } from './sound-tag';
 
 describe('inferSoundIconKey', () => {
   it.each([
     ['Shotgun', 'gunshot'],
-    ['Applause', 'applause'],
+    ['Applause', 'party-popper'],
     ['Sad Trombone', 'sad'],
     ['Airplane Captain', 'plane'],
     ['Countdown', 'timer'],
     ['Laugh Track', 'laugh'],
     ['Drum Roll', 'drum'],
     ['Crickets', 'bug'],
+    ['Mosquito', 'bug'],
+    ['Cat Purr 1', 'paw-print'],
     ['Air Horn', 'megaphone'],
     ['Pour Coffee', 'coffee'],
     ['Windows Startup', 'monitor'],
@@ -22,7 +25,7 @@ describe('inferSoundIconKey', () => {
     expect(inferSoundIconKey(name)).toBe(expected);
   });
 
-  it('falls back to music for an unrecognised name', () => {
+  it('falls back to music for an unrecognised, untagged name', () => {
     expect(inferSoundIconKey('Something Entirely New')).toBe('music');
   });
 
@@ -47,6 +50,39 @@ describe('human-voice', () => {
     ['Cough', 'human-voice'],
   ])('%s -> %s', (name, expected) => {
     expect(inferSoundIconKey(name)).toBe(expected);
+  });
+});
+
+describe('tag defaults', () => {
+  it.each([
+    ['fun', 'balloon'],
+    ['celebration', 'party-popper'],
+    ['chaos', 'zap'],
+    ['lame', 'circle-dot-dashed'],
+    ['mundane', 'chess-pawn'],
+    ['cats', 'paw-print'],
+  ] as const)('an unrecognised %s sound gets %s', (tag, expected) => {
+    expect(inferSoundIconKey('Something Entirely New', tag)).toBe(expected);
+  });
+
+  it.each(['drive', 'untagged'] as const)(
+    'leaves %s on the default icon',
+    (tag) => {
+      expect(inferSoundIconKey('Something Entirely New', tag)).toBe('music');
+    }
+  );
+
+  it('lets the name win over the tag', () => {
+    // The library's "Airplane Captain" is tagged chaos, and is still a plane.
+    expect(inferSoundIconKey('Airplane Captain', 'chaos')).toBe('plane');
+    // The one the user asked for by name: a mosquito is a bug, not chaos.
+    expect(inferSoundIconKey('Mosquito', 'chaos')).toBe('bug');
+  });
+
+  it('is total for every tag', () => {
+    for (const tag of [...SOUND_TAGS, UNTAGGED]) {
+      expect(SOUND_ICON_KEYS).toContain(inferSoundIconKey('zzz', tag));
+    }
   });
 });
 

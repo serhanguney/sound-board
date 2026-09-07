@@ -99,7 +99,7 @@ export async function uploadSound(formData: FormData): Promise<UploadResult> {
         id: blob.pathname as Sound['id'],
         displayName,
         url: blob.url,
-        iconKey: inferSoundIconKey(displayName),
+        iconKey: inferSoundIconKey(displayName, tag),
         tag,
       },
     };
