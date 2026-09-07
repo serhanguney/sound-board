@@ -25,7 +25,7 @@ interface Group {
  * taller than everything below it put together, so in-flow it pushed the queue
  * — the thing the user is building — off the bottom of the dialog. It opens on
  * focus and closes again as soon as a sound is picked, which is also what makes
- * the new entry landing at the top of the queue visible.
+ * the new entry landing at the end of the queue visible.
  *
  * Whether it is open is the caller's state, not this component's: Radix claims
  * the escape key on the document in the capture phase, so only the dialog can

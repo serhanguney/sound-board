@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { ListPlus, Minus, Plus, Shuffle } from 'lucide-react';
 import {
   Dialog,
@@ -12,6 +12,7 @@ import {
 import type { QueueEntryId, SoundId } from '@/domain/ids';
 import {
   createEntry,
+  DEFAULT_GAP_MINUTES,
   GAP_PRESETS_MINUTES,
   MAX_GAP_MINUTES,
   MIN_GAP_MINUTES,
@@ -31,13 +32,24 @@ type Mode = 'sound' | 'random';
 const clampMinutes = (value: number): number =>
   Math.min(MAX_GAP_MINUTES, Math.max(MIN_GAP_MINUTES, value));
 
+/**
+ * Composes a queue.
+ *
+ * Every piece of state here belongs to one open-close session and starts at a
+ * known default, so the board mounts this under a `key` that changes with each
+ * open rather than re-seeding it from an effect. Nothing has to notice that the
+ * dialog opened, and there is no render in between where a handler still closes
+ * over the previous session's values — which is what let a card's queue button
+ * add its sound with the gap left behind by the last time the dialog was used.
+ */
 export function AddToQueueDialog({
   open,
   onOpenChange,
   queue,
   sounds,
   durations,
-  presetSound,
+  recentIds,
+  initialCandidateId,
   onAdd,
   onMove,
   onRemove,
@@ -48,23 +60,30 @@ export function AddToQueueDialog({
   queue: Queue;
   sounds: readonly Sound[];
   durations: ReadonlyMap<SoundId, number>;
-  /** Pre-selects a sound when opened from a card. */
-  presetSound: Sound | null;
+  /** Most-recently queued first; surfaced above the full list in the picker. */
+  recentIds: readonly SoundId[];
+  /** Entry a card's queue button already added, highlighted on open. */
+  initialCandidateId: QueueEntryId | null;
   onAdd: (entry: QueueEntry) => void;
   onMove: (from: number, to: number) => void;
   onRemove: (id: QueueEntryId) => void;
   onPreview: (sound: Sound) => void;
 }) {
+  // Picking a specific sound is the primary path, so the combobox is what the
+  // dialog opens on either way.
   const [mode, setMode] = useState<Mode>('sound');
   const [tag, setTag] = useState<SoundTag | null>(null);
-  const [gapMinutes, setGapMinutes] = useState(2);
-  const [candidateId, setCandidateId] = useState<QueueEntryId | null>(null);
+  const [gapMinutes, setGapMinutes] = useState(DEFAULT_GAP_MINUTES);
+  const [candidateId, setCandidateId] = useState<QueueEntryId | null>(
+    initialCandidateId
+  );
+  // Closed on open: the dialog's first job is to show where the sound landed,
+  // and an overlay covering the queue would defeat that.
   const [pickerOpen, setPickerOpen] = useState(false);
 
   // A random pick from a tag nothing carries resolves to no sound at all, so
   // the entry would sit in the queue and fire silence.
   const counts = useMemo(() => countByTag(sounds), [sounds]);
-  const [recentIds, setRecentIds] = useState<readonly SoundId[]>([]);
 
   const add = useCallback(
     (input: { target: QueueEntry['target']; label: string }) => {
@@ -76,44 +95,13 @@ export function AddToQueueDialog({
   );
 
   const pickSound = useCallback(
-    (sound: Sound) => {
-      add({ target: { kind: 'sound', soundId: sound.id }, label: sound.displayName });
-      setRecentIds((current) => [
-        sound.id,
-        ...current.filter((id) => id !== sound.id),
-      ]);
-    },
+    (sound: Sound) =>
+      add({
+        target: { kind: 'sound', soundId: sound.id },
+        label: sound.displayName,
+      }),
     [add]
   );
-
-  // Re-seed each time the dialog opens so it never shows a stale selection.
-  useEffect(() => {
-    if (!open) return;
-    // Picking a specific sound is the primary path, so the combobox is what
-    // the dialog opens on either way.
-    setMode('sound');
-    setTag(null);
-    setGapMinutes(2);
-    setCandidateId(null);
-    // Closed on open: the dialog's first job is to show where the sound
-    // landed, and an overlay covering the queue would defeat that.
-    setPickerOpen(false);
-  }, [open, presetSound]);
-
-  // A card's queue button opens the dialog with that sound already added, so
-  // the first thing the user sees is where it landed. The ref guards against
-  // re-adding it when an unrelated render re-runs the effect.
-  const appliedPresetRef = useRef<SoundId | null>(null);
-  useEffect(() => {
-    if (!open) {
-      appliedPresetRef.current = null;
-      return;
-    }
-    if (!presetSound || appliedPresetRef.current === presetSound.id) return;
-
-    appliedPresetRef.current = presetSound.id;
-    pickSound(presetSound);
-  }, [open, presetSound, pickSound]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -224,7 +212,7 @@ export function AddToQueueDialog({
               Gap after previous sound
             </legend>
             <p className="text-[11px] text-ink-subtle">
-              Applied once the sound is moved below the top of the queue.
+              Ignored by whatever sits first: the queue opens at +0:00.
             </p>
 
             <div className="flex flex-wrap items-center gap-2">
@@ -270,7 +258,7 @@ export function AddToQueueDialog({
           </fieldset>
         </div>
 
-        <section className="flex shrink grow basis-48 flex-col gap-2 px-6 pb-2">
+        <section className="flex min-h-0 shrink grow basis-48 flex-col gap-2 px-6 pb-2">
           <div className="flex shrink-0 items-center justify-between">
             <h3 className="text-[10px] font-bold uppercase tracking-[0.08em] text-ink-subtle">
               In this queue

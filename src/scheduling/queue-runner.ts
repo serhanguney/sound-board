@@ -1,5 +1,5 @@
 import {
-  addEntryAtFront,
+  addEntry,
   advanceQueue,
   clearQueue,
   EMPTY_QUEUE,
@@ -110,9 +110,9 @@ export class QueueRunner {
     this.#update(() => queue);
   }
 
-  /** New entries land at the front, at +0:00, ready to be dragged into place. */
+  /** New entries land at the end, one gap after whatever currently ends it. */
   add(entry: QueueEntry): void {
-    this.#update((queue) => addEntryAtFront(queue, entry));
+    this.#update((queue) => addEntry(queue, entry));
   }
 
   move(from: number, to: number): void {

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ChevronDown, ChevronUp, CornerDownLeft, GripVertical, X } from 'lucide-react';
 import type { QueueEntryId } from '@/domain/ids';
@@ -58,6 +58,13 @@ export function QueueEntryList({
   const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null);
   useEffect(() => setPortalTarget(document.body), []);
 
+  // A new entry lands at the end of the queue, which is below the fold as soon
+  // as the list scrolls. `nearest` keeps the dialog itself still.
+  const candidateRef = useRef<HTMLLIElement | null>(null);
+  useEffect(() => {
+    candidateRef.current?.scrollIntoView({ block: 'nearest' });
+  }, [candidateId]);
+
   const offsets = entryOffsets(entries);
   const { fromIndex, toIndex, pointer, registerRow, start } = useReorder({
     count: entries.length,
@@ -104,7 +111,10 @@ export function QueueEntryList({
           return (
             <li
               key={entry.id}
-              ref={(node) => registerRow(index, node)}
+              ref={(node) => {
+                registerRow(index, node);
+                if (isCandidate) candidateRef.current = node;
+              }}
               className={cn(
                 'flex items-center gap-2.5 rounded-[9px] px-2.5 py-2 transition-colors',
                 isCandidate

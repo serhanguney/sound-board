@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import { toSoundId } from './ids';
 import {
   addEntry,
-  addEntryAtFront,
   advanceQueue,
   createEntry,
   deadlineOf,
@@ -258,28 +257,42 @@ describe('formatting', () => {
 });
 
 
-describe('addEntryAtFront', () => {
-  it('places a newly picked sound at the front, firing at +0:00', () => {
-    const queue = addEntryAtFront(queueOf(5, 5), entry('new', 2));
+describe('addEntry', () => {
+  it('places a newly picked sound at the end, one gap after the last entry', () => {
+    const queue = addEntry(queueOf(0, 5), entry('new', 2));
 
-    expect(queue.entries[0]?.label).toBe('new');
-    expect(entryOffsets(queue.entries)[0]).toBe(0);
+    expect(queue.entries.at(-1)?.label).toBe('new');
+    expect(entryOffsets(queue.entries)).toEqual([
+      0,
+      minutesToMs(5),
+      minutesToMs(7),
+    ]);
   });
 
-  it('keeps the cursor pointing at the same upcoming entry', () => {
+  it('gives the first entry +0:00 whatever gap it carries', () => {
+    const queue = addEntry(EMPTY_QUEUE, entry('new', 5));
+    expect(entryOffsets(queue.entries)).toEqual([0]);
+  });
+
+  it('lands ahead of the cursor of a running queue, so it still fires', () => {
     const running = startQueue(queueOf(1, 30), NOW);
     const { queue } = advanceQueue(running, NOW + minutesToMs(1) + 200);
     expect(queue.cursor).toBe(1);
 
-    expect(addEntryAtFront(queue, entry('new', 2)).cursor).toBe(2);
+    const added = addEntry(queue, entry('new', 2));
+    expect(added.cursor).toBe(1);
+    expect(added.entries.length).toBe(3);
   });
 });
 
 describe('moveEntry', () => {
   it('re-spaces a moved entry against its new predecessor', () => {
-    // Matches the design: the candidate carries a 2-minute gap, so dropping it
-    // third puts it two minutes after the entry above it.
-    const queue = addEntryAtFront(queueOf(0, 8, 9.667), entry('cand', 2));
+    // The candidate carries a 2-minute gap, so dropping it third puts it two
+    // minutes after the entry above it.
+    const queue = {
+      ...EMPTY_QUEUE,
+      entries: [entry('cand', 2), ...queueOf(0, 8, 9.667).entries],
+    };
     const moved = moveEntry(queue, 0, 2);
 
     expect(moved.entries.map((e) => e.label)).toEqual([

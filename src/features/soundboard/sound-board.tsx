@@ -4,7 +4,13 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AlertCircle } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { useAudioEngine, useAudioState } from '@/audio/audio-provider';
-import type { QueueEntry } from '@/domain/queue';
+import type { QueueEntryId, SoundId } from '@/domain/ids';
+import {
+  createEntry,
+  DEFAULT_GAP_MINUTES,
+  minutesToMs,
+  type QueueEntry,
+} from '@/domain/queue';
 import { filterByTag, searchSounds, type Sound } from '@/domain/sound';
 import type { SoundTagOrUntagged } from '@/domain/sound-tag';
 import { AddToQueueDialog } from '@/features/queue/add-to-queue-dialog';
@@ -37,8 +43,19 @@ export function SoundBoard() {
 
   const [query, setQuery] = useState('');
   const [activeTag, setActiveTag] = useState<SoundTagOrUntagged | null>(null);
-  const [dialog, setDialog] = useState<{ sound: Sound | null } | null>(null);
+  /**
+   * `session` increments on every open and is the dialog's `key`, so each open
+   * gets a freshly mounted dialog with default gap, mode and selection. It is
+   * kept while the dialog closes so Radix can still play its exit animation.
+   */
+  const [dialog, setDialog] = useState<{
+    session: number;
+    open: boolean;
+    candidateId: QueueEntryId | null;
+  }>({ session: 0, open: false, candidateId: null });
   const [uploadOpen, setUploadOpen] = useState(false);
+  // Surfaced as "Recent" in the picker; outlives any one dialog session.
+  const [recentIds, setRecentIds] = useState<readonly SoundId[]>([]);
   // Held in memory only, for the life of the tab.
   const [adminPassword, setAdminPassword] = useState<string | null>(null);
 
@@ -55,11 +72,46 @@ export function SoundBoard() {
     (sound: Sound) => engine.stop(sound.id),
     [engine]
   );
-  const handleQueue = useCallback((sound: Sound) => setDialog({ sound }), []);
+  const openQueueDialog = useCallback((candidateId: QueueEntryId | null) => {
+    setDialog((current) => ({
+      session: current.session + 1,
+      open: true,
+      candidateId,
+    }));
+  }, []);
 
   const handleAdd = useCallback(
-    (entry: QueueEntry) => runner.add(entry),
+    (entry: QueueEntry) => {
+      runner.add(entry);
+      if (entry.target.kind === 'sound') {
+        const { soundId } = entry.target;
+        setRecentIds((current) => [
+          soundId,
+          ...current.filter((id) => id !== soundId),
+        ]);
+      }
+    },
     [runner]
+  );
+
+  /**
+   * A card's queue button queues the sound outright and opens the dialog on it,
+   * so the first thing the user sees is where it landed. Adding it here — in
+   * the click that asked for it — is what keeps it out of an effect inside the
+   * dialog, where it could only run after a render that had already been given
+   * the previous session's gap.
+   */
+  const handleQueue = useCallback(
+    (sound: Sound) => {
+      const entry = createEntry({
+        target: { kind: 'sound', soundId: sound.id },
+        label: sound.displayName,
+        gapMs: minutesToMs(DEFAULT_GAP_MINUTES),
+      });
+      handleAdd(entry);
+      openQueueDialog(entry.id);
+    },
+    [handleAdd, openQueueDialog]
   );
   const handleRemove = useCallback(
     (id: QueueEntry['id']) => runner.remove(id),
@@ -105,7 +157,7 @@ export function SoundBoard() {
           }}
           onHold={() => runner.hold()}
           onClear={() => runner.clear()}
-          onAdd={() => setDialog({ sound: null })}
+          onAdd={() => openQueueDialog(null)}
         />
 
         {isPending ? (
@@ -133,12 +185,16 @@ export function SoundBoard() {
       </main>
 
       <AddToQueueDialog
-        open={dialog !== null}
-        onOpenChange={(open) => !open && setDialog(null)}
+        key={dialog.session}
+        open={dialog.open}
+        onOpenChange={(open) =>
+          !open && setDialog((current) => ({ ...current, open: false }))
+        }
         queue={queue}
         sounds={sounds}
         durations={durations}
-        presetSound={dialog?.sound ?? null}
+        recentIds={recentIds}
+        initialCandidateId={dialog.candidateId}
         onAdd={handleAdd}
         onMove={handleMove}
         onRemove={handleRemove}

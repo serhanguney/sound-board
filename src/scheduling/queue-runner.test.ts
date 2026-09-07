@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { toSoundId } from '@/domain/ids';
 import {
   createEntry,
+  entryOffsets,
   minutesToMs,
   queueStatus,
   type QueueEntry,
@@ -23,13 +24,9 @@ let stop: () => void;
 let fired: string[];
 let skipped: string[];
 
-/**
- * Adds entries so the queue ends up in the order written. `add` inserts at the
- * front — a newly picked sound opens the queue — so the input is reversed here
- * to keep the tests reading in play order.
- */
+/** Adds entries in play order — `add` appends, so the order is written as-is. */
 const enqueue = (...items: readonly (readonly [string, number])[]) => {
-  for (const [label, gap] of [...items].reverse()) runner.add(entry(label, gap));
+  for (const [label, gap] of items) runner.add(entry(label, gap));
 };
 
 beforeEach(() => {
@@ -209,11 +206,13 @@ describe('QueueRunner', () => {
 });
 
 describe('QueueRunner reordering', () => {
-  it('adds new entries at the front so they open the queue', () => {
+  it('appends new entries, spacing each one by its own gap', () => {
     runner.add(entry('first', 5));
-    runner.add(entry('second', 5));
+    runner.add(entry('second', 8));
 
-    expect(queue().entries.map((e) => e.label)).toEqual(['second', 'first']);
+    expect(queue().entries.map((e) => e.label)).toEqual(['first', 'second']);
+    // 'first' opens the queue at +0:00; 'second' picks up the gap chosen for it.
+    expect(entryOffsets(queue().entries)).toEqual([0, minutesToMs(8)]);
   });
 
   it('moves an entry to a new position', () => {

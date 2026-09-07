@@ -5,6 +5,7 @@ import { soundTagSchema } from './sound-tag';
 export const MIN_GAP_MINUTES = 0;
 export const MAX_GAP_MINUTES = 120;
 export const GAP_PRESETS_MINUTES = [2, 5, 10, 20] as const;
+export const DEFAULT_GAP_MINUTES = 2;
 
 const MS_PER_MINUTE = 60_000;
 
@@ -137,6 +138,16 @@ export function remainingMsOf(
   return Math.max(0, offset - elapsedMs(queue, now));
 }
 
+/**
+ * Where a newly picked sound lands: the end of the queue, spaced from whatever
+ * currently ends it by the entry's own `gapMs`.
+ *
+ * Appending is what makes the gap control mean something at the moment it is
+ * used. An entry inserted at the front is always at +0:00 — `entryOffsets`
+ * gives index 0 no offset — so its gap would sit unused until it was dragged
+ * down, and the spacing that appeared instead would be the *previous* entry's
+ * gap, one add behind whatever the user had just chosen.
+ */
 export const addEntry = (queue: Queue, entry: QueueEntry): Queue => ({
   ...queue,
   entries: [...queue.entries, entry],
@@ -175,13 +186,6 @@ export function moveEntry(queue: Queue, from: number, to: number): Queue {
     entries: [...without.slice(0, target), moved, ...without.slice(target)],
   };
 }
-
-/** Where a newly picked sound lands: the front of the queue, at +0:00. */
-export const addEntryAtFront = (queue: Queue, entry: QueueEntry): Queue => ({
-  ...queue,
-  entries: [entry, ...queue.entries],
-  cursor: queue.cursor > 0 ? queue.cursor + 1 : queue.cursor,
-});
 
 export const clearQueue = (): Queue => EMPTY_QUEUE;
 
