@@ -18,6 +18,8 @@ import { QueuePanel } from '@/features/queue/queue-panel';
 import { useQueueAudioBridge } from '@/features/queue/use-queue-runner-bridge';
 import { AdminUploadDialog } from '@/features/sounds/admin-upload-dialog';
 import { useSounds } from '@/features/sounds/use-sounds';
+import { FAVICON_IDLE, FAVICON_PLAYING } from './favicon';
+import { useFavicon } from './use-favicon';
 import { useQueueRunner, useQueueState } from '@/scheduling/queue-provider';
 import { SoundGrid } from './sound-grid';
 import { TopBar } from './top-bar';
@@ -34,6 +36,10 @@ export function SoundBoard() {
   const { queue, nowMs } = useQueueState();
 
   useQueueAudioBridge(sounds);
+
+  // A scheduled sound fires while the user is in a call, looking at anything
+  // but this tab. The icon is what tells them it went out.
+  useFavicon(playingSoundId === null ? FAVICON_IDLE : FAVICON_PLAYING);
 
   // Reconciles audio elements against the library. Volume is deliberately not a
   // dependency: it is applied to live elements and must not rebuild them.
