@@ -13,10 +13,12 @@ import type { QueueEntryId, SoundId } from '@/domain/ids';
 import {
   createEntry,
   DEFAULT_GAP_MINUTES,
+  formatRemaining,
   GAP_PRESETS_MINUTES,
   MAX_GAP_MINUTES,
   MIN_GAP_MINUTES,
   minutesToMs,
+  totalDurationMs,
   type Queue,
   type QueueEntry,
 } from '@/domain/queue';
@@ -286,7 +288,16 @@ export function AddToQueueDialog({
           </div>
         </section>
 
-        <footer className="mt-auto flex shrink-0 justify-end border-t border-line px-6 py-4">
+        <footer className="mt-auto flex shrink-0 items-center justify-between gap-3 border-t border-line px-6 py-4">
+          {/* Derived from the entries on every render, so adding or removing a
+              sound moves it without anything having to be kept in sync. */}
+          <p className="text-[13px] text-ink-subtle">
+            Total length{' '}
+            <span className="font-display font-semibold tabular-nums text-ink">
+              {formatRemaining(totalDurationMs(queue.entries))}
+            </span>
+          </p>
+
           <button
             type="button"
             onClick={() => onOpenChange(false)}

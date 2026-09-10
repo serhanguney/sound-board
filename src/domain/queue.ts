@@ -103,6 +103,21 @@ export function entryOffsets(entries: readonly QueueEntry[]): readonly number[] 
   );
 }
 
+/**
+ * The spacing each entry is shown with: how long after the *previous* entry it
+ * fires, rather than how far it sits from the start of the queue.
+ *
+ * Derived from the offsets rather than read off `gapMs` directly, so the first
+ * entry reports the 0:00 it actually opens at instead of the gap it is carrying
+ * for whenever it is dragged further down.
+ */
+export function entryGaps(entries: readonly QueueEntry[]): readonly number[] {
+  const offsets = entryOffsets(entries);
+  return offsets.map((offset, index) =>
+    index === 0 ? 0 : offset - (offsets.at(index - 1) ?? 0)
+  );
+}
+
 export function totalDurationMs(entries: readonly QueueEntry[]): number {
   return entryOffsets(entries).at(-1) ?? 0;
 }
@@ -199,6 +214,18 @@ export const holdQueue = (queue: Queue, now: number): Queue =>
   queue.startedAt === null
     ? queue
     : { ...queue, startedAt: null, heldElapsedMs: elapsedMs(queue, now) };
+
+/**
+ * Plays a drained queue again from the top.
+ *
+ * The banked elapsed time is dropped along with the cursor. A finished queue
+ * has banked its whole run, so keeping it would leave every deadline already in
+ * the past and the replay would skip the lot as stale before it played a note.
+ */
+export const restartQueue = (queue: Queue, now: number): Queue =>
+  queue.entries.length === 0
+    ? queue
+    : { ...queue, startedAt: now, cursor: 0, heldElapsedMs: 0 };
 
 /**
  * How late an entry may be and still be worth playing.

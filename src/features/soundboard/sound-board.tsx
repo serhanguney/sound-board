@@ -27,7 +27,12 @@ import { TopBar } from './top-bar';
 const EMPTY_SOUNDS: readonly Sound[] = [];
 
 export function SoundBoard() {
-  const { data: sounds = EMPTY_SOUNDS, isPending, isError, error } = useSounds();
+  const {
+    data: sounds = EMPTY_SOUNDS,
+    isPending,
+    isError,
+    error,
+  } = useSounds();
 
   const engine = useAudioEngine();
   const { playingSoundId, failedSoundIds, durations } = useAudioState();
@@ -154,6 +159,7 @@ export function SoundBoard() {
         <QueuePanel
           queue={queue}
           sounds={sounds}
+          durations={durations}
           nowMs={nowMs}
           onPlay={() => {
             // Must run inside the click handler: this gesture is what grants
@@ -162,6 +168,10 @@ export function SoundBoard() {
             runner.play();
           }}
           onHold={() => runner.hold()}
+          onReplay={() => {
+            void engine.unlock();
+            runner.replay();
+          }}
           onClear={() => runner.clear()}
           onAdd={() => openQueueDialog(null)}
         />

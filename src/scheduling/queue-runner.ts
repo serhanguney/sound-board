@@ -7,6 +7,7 @@ import {
   moveEntry,
   nextDeadline,
   removeEntry,
+  restartQueue,
   startQueue,
   type Queue,
   type QueueEntry,
@@ -134,6 +135,11 @@ export class QueueRunner {
 
   hold(): void {
     this.#update((queue) => holdQueue(queue, Date.now()));
+  }
+
+  /** Runs a drained queue again from its first entry. */
+  replay(): void {
+    this.#update((queue) => restartQueue(queue, Date.now()));
   }
 
   #update(project: (queue: Queue) => Queue): void {

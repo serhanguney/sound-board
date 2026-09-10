@@ -1,50 +1,45 @@
 'use client';
 
-import { ListMusic, Pause, Play, X } from 'lucide-react';
+import { ListMusic, Pause, Play, RotateCcw, X } from 'lucide-react';
+import type { SoundId } from '@/domain/ids';
 import {
   formatRemaining,
   queueStatus,
-  remainingMsOf,
   totalDurationMs,
   type Queue,
 } from '@/domain/queue';
 import type { Sound } from '@/domain/sound';
 import { cn } from '@/lib/utils';
-import { QueueNextUp, QueueTimeline } from './queue-timeline';
+import { QueueTimeline } from './queue-timeline';
 
-const STATUS_COPY: Readonly<Record<string, string>> = {
-  empty: 'Nothing queued yet',
-  idle: 'Ready — press play when your meeting starts',
-  running: 'Running',
-  held: 'On hold',
-  finished: 'Finished',
-};
+const EMPTY_COPY = 'Nothing queued yet';
 
 export function QueuePanel({
   queue,
   sounds,
+  durations,
   nowMs,
   onPlay,
   onHold,
+  onReplay,
   onClear,
   onAdd,
 }: {
   queue: Queue;
   sounds: readonly Sound[];
+  durations: ReadonlyMap<SoundId, number>;
   nowMs: number;
   onPlay: () => void;
   onHold: () => void;
+  /** Runs a drained queue again from its first entry. */
+  onReplay: () => void;
   onClear: () => void;
   onAdd: () => void;
 }) {
   const status = queueStatus(queue);
   const isRunning = status === 'running';
+  const isFinished = status === 'finished';
   const pending = queue.entries.length - queue.cursor;
-
-  const nextRemaining =
-    isRunning && pending > 0
-      ? (remainingMsOf(queue, queue.cursor, nowMs) ?? 0)
-      : null;
 
   return (
     <section
@@ -68,25 +63,23 @@ export function QueuePanel({
           Queued sounds
         </h2>
 
+        {/* The countdown lives on the timeline's next marker alone — this is
+            where the queue is, not when the next sound lands. */}
         <p className="text-[13px] text-ink-subtle">
-          {queue.entries.length > 0
-            ? `${pending} pending · ${formatRemaining(totalDurationMs(queue.entries))} total`
-            : STATUS_COPY.empty}
+          {queue.entries.length === 0
+            ? EMPTY_COPY
+            : `${isFinished ? 'Finished' : `${pending} pending`} · ${formatRemaining(totalDurationMs(queue.entries))} total`}
         </p>
 
         <span className="flex-1" />
 
-        {nextRemaining !== null && (
-          <span className="text-[13px] font-medium tabular-nums text-accent">
-            next in {formatRemaining(nextRemaining)}
-          </span>
-        )}
-
         <div className="flex items-center gap-2">
           <button
             type="button"
-            onClick={isRunning ? onHold : onPlay}
-            disabled={pending === 0}
+            onClick={isRunning ? onHold : isFinished ? onReplay : onPlay}
+            // A drained queue is still playable: the button replays it rather
+            // than going dead and leaving "clear all" as the only way forward.
+            disabled={queue.entries.length === 0}
             className={cn(
               'inline-flex items-center gap-2 rounded-sm px-3.5 py-2.5 text-[13px] font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-40',
               isRunning
@@ -98,6 +91,11 @@ export function QueuePanel({
               <>
                 <Pause className="h-4 w-4" aria-hidden />
                 Hold queue
+              </>
+            ) : isFinished ? (
+              <>
+                <RotateCcw className="h-4 w-4" aria-hidden />
+                Replay queue
               </>
             ) : (
               <>
@@ -125,18 +123,24 @@ export function QueuePanel({
           you press play, so you can set one up before your meeting starts.
         </p>
       ) : (
-        <div className="mt-5 space-y-5">
-          <QueueTimeline queue={queue} sounds={sounds} nowMs={nowMs} />
-          <QueueNextUp queue={queue} sounds={sounds} nowMs={nowMs} />
+        <div className="mt-5">
+          <QueueTimeline
+            queue={queue}
+            sounds={sounds}
+            durations={durations}
+            nowMs={nowMs}
+          />
         </div>
       )}
 
+      {/* The same dialog either way — what changes is whether there is
+          anything in there yet to edit. */}
       <button
         type="button"
         onClick={onAdd}
         className="mt-5 text-[13px] font-medium text-accent hover:underline"
       >
-        + Add to queue
+        {queue.entries.length === 0 ? '+ Add to queue' : 'Edit queue'}
       </button>
     </section>
   );

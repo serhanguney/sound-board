@@ -7,6 +7,7 @@ import {
   deadlineOf,
   elapsedMs,
   EMPTY_QUEUE,
+  entryGaps,
   entryOffsets,
   formatOffset,
   formatRemaining,
@@ -18,6 +19,7 @@ import {
   queueStatus,
   removeEntry,
   remainingMsOf,
+  restartQueue,
   startQueue,
   totalDurationMs,
   type Queue,
@@ -91,6 +93,30 @@ describe('entryOffsets', () => {
     ]);
   });
 
+  it('reports each entry\'s spacing from the one before it', () => {
+    // The queue is composed as 2/5/10 minute gaps; the first entry opens the
+    // queue, so what it is spaced by is 0:00 and the rest keep their own gap.
+    expect(entryGaps(queueOf(2, 5, 10).entries)).toEqual([
+      0,
+      minutesToMs(5),
+      minutesToMs(10),
+    ]);
+  });
+
+  it('gaps are the differences between consecutive offsets', () => {
+    const { entries } = queueOf(3, 7, 1, 4);
+    const offsets = entryOffsets(entries);
+    expect(entryGaps(entries)).toEqual(
+      offsets.map((offset, index) =>
+        index === 0 ? 0 : offset - (offsets.at(index - 1) ?? 0)
+      )
+    );
+  });
+
+  it('has no gaps for an empty queue', () => {
+    expect(entryGaps([])).toEqual([]);
+  });
+
   it('reports the total as the last offset', () => {
     expect(totalDurationMs(queueOf(2, 5, 10).entries)).toBe(minutesToMs(15));
   });
@@ -120,6 +146,40 @@ describe('deadlines', () => {
       minutesToMs(2)
     );
     expect(remainingMsOf(running, 1, NOW + minutesToMs(99))).toBe(0);
+  });
+});
+
+describe('restartQueue', () => {
+  it('rewinds a finished queue and re-anchors it to now', () => {
+    const finished = {
+      ...startQueue(queueOf(0, 10), NOW),
+      cursor: 2,
+      heldElapsedMs: minutesToMs(10),
+    };
+    expect(queueStatus(finished)).toBe('finished');
+
+    const replayed = restartQueue(finished, NOW + minutesToMs(30));
+
+    expect(queueStatus(replayed)).toBe('running');
+    expect(replayed.cursor).toBe(0);
+    expect(replayed.startedAt).toBe(NOW + minutesToMs(30));
+    // Banked time goes with the cursor, or every deadline would already be in
+    // the past and the whole replay would be skipped as stale.
+    expect(replayed.heldElapsedMs).toBe(0);
+    expect(elapsedMs(replayed, NOW + minutesToMs(30))).toBe(0);
+  });
+
+  it('keeps the entries and their spacing', () => {
+    const replayed = restartQueue(
+      { ...startQueue(queueOf(0, 10), NOW), cursor: 2 },
+      NOW
+    );
+    expect(entryOffsets(replayed.entries)).toEqual([0, minutesToMs(10)]);
+    expect(advanceQueue(replayed, NOW).fired?.label).toBe('s0');
+  });
+
+  it('has nothing to restart when the queue is empty', () => {
+    expect(restartQueue(EMPTY_QUEUE, NOW)).toBe(EMPTY_QUEUE);
   });
 });
 
@@ -255,7 +315,6 @@ describe('formatting', () => {
     expect(formatOffset(480_000)).toBe('+8:00');
   });
 });
-
 
 describe('addEntry', () => {
   it('places a newly picked sound at the end, one gap after the last entry', () => {

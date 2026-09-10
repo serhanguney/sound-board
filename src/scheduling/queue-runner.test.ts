@@ -152,6 +152,43 @@ describe('QueueRunner', () => {
     expect(fired).toEqual(['a', 'b']);
   });
 
+  it('replays a finished queue from the top', () => {
+    enqueue(['a', 0], ['b', 10]);
+    runner.play();
+    vi.advanceTimersByTime(minutesToMs(11));
+    expect(fired).toEqual(['a', 'b']);
+    expect(queueStatus(queue())).toBe('finished');
+
+    runner.replay();
+    expect(queueStatus(queue())).toBe('running');
+
+    // The whole run's banked elapsed time went with the cursor: nothing is
+    // already overdue, so the replay plays both entries in order again.
+    vi.advanceTimersByTime(1_000);
+    expect(fired).toEqual(['a', 'b', 'a']);
+
+    vi.advanceTimersByTime(minutesToMs(10));
+    expect(fired).toEqual(['a', 'b', 'a', 'b']);
+    expect(skipped).toEqual([]);
+  });
+
+  it('replays a queue that was held part-way, not just a finished one', () => {
+    enqueue(['a', 0], ['b', 10]);
+    runner.play();
+    vi.advanceTimersByTime(minutesToMs(4));
+    runner.hold();
+
+    runner.replay();
+    vi.advanceTimersByTime(1_000);
+    expect(fired).toEqual(['a', 'a']);
+  });
+
+  it('has nothing to replay when the queue is empty', () => {
+    const before = queue();
+    runner.replay();
+    expect(queue()).toBe(before);
+  });
+
   it('clears everything back to empty', () => {
     enqueue(['a', 1]);
     runner.play();
@@ -174,7 +211,9 @@ describe('QueueRunner', () => {
 
   it('publishes the advanced queue before emitting', () => {
     const cursors: number[] = [];
-    runner.fired.on(() => cursors.push(runner.state.getSnapshot().queue.cursor));
+    runner.fired.on(() =>
+      cursors.push(runner.state.getSnapshot().queue.cursor)
+    );
 
     enqueue(['a', 0]);
     runner.play();
