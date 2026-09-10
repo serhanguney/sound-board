@@ -1,6 +1,5 @@
 'use client';
 
-import type { SoundId } from '@/domain/ids';
 import {
   elapsedMs,
   entryGaps,
@@ -11,7 +10,7 @@ import {
   totalDurationMs,
   type Queue,
 } from '@/domain/queue';
-import { formatDuration, type Sound } from '@/domain/sound';
+import { type Sound } from '@/domain/sound';
 import type { SoundTagOrUntagged } from '@/domain/sound-tag';
 import { SoundIcon } from '@/features/sounds/sound-icon';
 import { TagDot } from '@/features/sounds/tag-badge';
@@ -31,13 +30,10 @@ import { describeEntry } from './queue-entry-icon';
 export function QueueTimeline({
   queue,
   sounds,
-  durations,
   nowMs,
 }: {
   queue: Queue;
   sounds: readonly Sound[];
-  /** Durations read from the audio elements, in seconds, keyed by sound. */
-  durations: ReadonlyMap<SoundId, number>;
   nowMs: number;
 }) {
   const { entries } = queue;

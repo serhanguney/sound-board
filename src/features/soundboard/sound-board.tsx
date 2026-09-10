@@ -159,7 +159,6 @@ export function SoundBoard() {
         <QueuePanel
           queue={queue}
           sounds={sounds}
-          durations={durations}
           nowMs={nowMs}
           onPlay={() => {
             // Must run inside the click handler: this gesture is what grants

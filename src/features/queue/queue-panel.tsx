@@ -1,7 +1,6 @@
 'use client';
 
 import { ListMusic, Pause, Play, RotateCcw, X } from 'lucide-react';
-import type { SoundId } from '@/domain/ids';
 import {
   formatRemaining,
   queueStatus,
@@ -17,7 +16,6 @@ const EMPTY_COPY = 'Nothing queued yet';
 export function QueuePanel({
   queue,
   sounds,
-  durations,
   nowMs,
   onPlay,
   onHold,
@@ -27,7 +25,6 @@ export function QueuePanel({
 }: {
   queue: Queue;
   sounds: readonly Sound[];
-  durations: ReadonlyMap<SoundId, number>;
   nowMs: number;
   onPlay: () => void;
   onHold: () => void;
@@ -127,7 +124,6 @@ export function QueuePanel({
           <QueueTimeline
             queue={queue}
             sounds={sounds}
-            durations={durations}
             nowMs={nowMs}
           />
         </div>
